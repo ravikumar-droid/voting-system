@@ -1,0 +1,60 @@
+name: Admin Backend (Gist DB)
+on:
+  workflow_dispatch:
+    inputs:
+      payload:
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  admin-logic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Process Admin Action
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          PAYLOAD: ${{ github.event.inputs.payload }}
+        run: |
+          node -e "
+          const fs = require('fs');
+          async function run() {
+            const payload = JSON.parse(process.env.PAYLOAD);
+            const gistUrl = 'gistUrl, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({
+                        files: {
+                            'polls.json': { content: JSON.stringify(polls, null, 2) },
+                            'public_polls.json': { content: JSON.stringify(polls, null, 2) },
+                            ['res-' + payload.requestId + '.json']: { content: JSON.stringify(responseData)https://api.github.com/gists/' + process.env.GIST_ID;
+            const headers = { 'Authorization': 'token ' + process.env.GIST_TOKEN, 'Accept': 'application/vnd.github.v3+json' };
+            
+            const gistReq = await fetch(gistUrl, { headers });
+            const gistData = await gistReq.json();
+            
+            let users = JSON }
+                        }
+                    })
+                });
+            } catch (e) {
+                await fetch(gistUrl, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({ files:.parse(gistData.files['users.json'].content);
+            let polls = JSON.parse(gistData.files['polls.json'].content || '[]');
+            let responseData = {};
+
+            try {
+                 { ['res-' + payload.requestId + '.json']: { content: JSON.stringify({ status: 400, error: e.message }) } } })
+                });
+            }
+          }
+          run();
+          "
