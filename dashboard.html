@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecureVote | Voting Hub</title>
+    <title>SecureVote | Anonymous Ballot</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/api.js"></script>
@@ -14,28 +14,28 @@
     <nav class="bg-white border-b sticky top-0 z-10 p-4 shadow-sm flex justify-between items-center px-6 md:px-20">
         <div class="flex items-center gap-2">
             <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black italic">V</div>
-            <h1 class="text-xl font-black text-slate-900 tracking-tighter">SECUREVOTE</h1>
+            <h1 class="text-xl font-black text-slate-900 tracking-tighter uppercase">SecureVote</h1>
         </div>
         <div class="flex items-center gap-4 md:gap-8">
-            <div class="hidden md:block text-right">
-                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Voter</p>
-                <span id="welcomeUser" class="font-black text-blue-600 text-sm"></span>
+            <div class="text-right">
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Verified Voter</p>
+                <span id="welcomeUser" class="font-black text-slate-700 text-sm"></span>
             </div>
-            <button onclick="logout()" class="bg-red-50 text-red-600 px-4 py-2 rounded-xl hover:bg-red-100 transition-colors font-bold text-sm">Logout</button>
+            <button onclick="logout()" class="bg-slate-100 text-slate-600 px-4 py-2 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all font-bold text-sm border border-slate-200">Logout</button>
         </div>
     </nav>
 
     <!-- MAIN CONTENT -->
     <main class="max-w-6xl mx-auto p-6 md:p-12">
-        <header class="mb-12">
-            <h2 class="text-3xl font-black text-slate-900">Current Elections</h2>
-            <p class="text-slate-500 font-medium">Cast your vote securely. Your identity remains anonymous.</p>
+        <header class="mb-12 border-l-4 border-blue-600 pl-6">
+            <h2 class="text-4xl font-black text-slate-900 tracking-tight">Active Elections</h2>
+            <p class="text-slate-500 font-medium mt-2">Cast your anonymous ballot below. Results are hidden until the election concludes.</p>
         </header>
 
         <!-- LOADING STATE -->
         <div id="loader" class="flex flex-col items-center justify-center py-20">
-            <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <p class="text-slate-400 mt-4 font-bold animate-pulse uppercase text-xs tracking-widest">Syncing with Gist Database...</p>
+            <div class="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <p class="text-slate-400 mt-4 font-bold uppercase text-[10px] tracking-[0.2em]">Syncing Encrypted Data...</p>
         </div>
 
         <!-- POLLS GRID -->
@@ -45,7 +45,6 @@
     </main>
 
     <script>
-        // Security Check: Redirect if not logged in
         if (!localStorage.getItem('token')) window.location.replace('index.html');
         document.getElementById('welcomeUser').innerText = localStorage.getItem('username');
 
@@ -59,83 +58,105 @@
                 grid.classList.remove('hidden');
 
                 grid.innerHTML = polls.map(poll => {
-                    // Statistics Logic
                     const totalVotes = poll.results.reduce((a, b) => a + b, 0);
-                    const maxVotes = Math.max(...poll.results);
-                    const winnerIndex = poll.results.indexOf(maxVotes);
-                    const leadingCandidate = totalVotes > 0 ? poll.options[winnerIndex] : "No votes";
                     const isClosed = poll.status === 'closed';
+                    const showResults = poll.showResults === true; // The Admin Toggle
+
+                    // Calculate winner for display only if showResults is true
+                    let winnerName = "Hidden";
+                    if (showResults) {
+                        const maxVotes = Math.max(...poll.results);
+                        winnerName = totalVotes > 0 ? poll.options[poll.results.indexOf(maxVotes)] : "No votes";
+                    }
 
                     return `
-                        <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border overflow-hidden transition-all ${isClosed ? 'border-slate-200 opacity-90' : 'border-white hover:border-blue-400'}">
+                        <div class="bg-white rounded-[2.5rem] shadow-2xl shadow-slate-200/60 border-2 overflow-hidden transition-all ${isClosed ? 'border-slate-200 grayscale-[0.5]' : 'border-white hover:border-blue-400'}">
                             
                             <!-- Header -->
-                            <div class="p-8 pb-4 flex justify-between items-start">
-                                <div>
-                                    <h3 class="text-2xl font-black text-slate-800 leading-tight">${poll.question}</h3>
-                                    <span class="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${isClosed ? 'bg-slate-100 text-slate-500' : 'bg-emerald-100 text-emerald-600'}">
-                                        <span class="w-1.5 h-1.5 rounded-full ${isClosed ? 'bg-slate-400' : 'bg-emerald-500 animate-pulse'}"></span>
-                                        ${isClosed ? 'Election Ended' : 'Live Election'}
+                            <div class="p-10 pb-6">
+                                <div class="flex justify-between items-start mb-4">
+                                    <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${isClosed ? 'bg-slate-100 text-slate-500' : 'bg-blue-100 text-blue-600'}">
+                                        ${isClosed ? 'Election Ended' : 'Voting In Progress'}
                                     </span>
+                                    <span class="text-[10px] font-black text-slate-300 uppercase tracking-widest italic">Encrypted ID: ${poll.id.slice(-6)}</span>
                                 </div>
+                                <h3 class="text-3xl font-black text-slate-800 leading-tight">${poll.question}</h3>
                             </div>
 
-                            <!-- Analytics Summary -->
-                            <div class="px-8 grid grid-cols-2 gap-4 mb-6">
-                                <div class="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-                                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Turnout</p>
-                                    <p class="text-xl font-black text-slate-800">${totalVotes} <span class="text-xs font-normal text-slate-400">Votes</span></p>
-                                </div>
-                                <div class="bg-blue-50 rounded-2xl p-4 border border-blue-100">
-                                    <p class="text-[10px] font-bold text-blue-400 uppercase tracking-widest">${isClosed ? 'Winner' : 'Leading'}</p>
-                                    <p class="text-lg font-black text-blue-700 truncate">${leadingCandidate}</p>
-                                </div>
+                            <!-- BLIND STATS LOGIC -->
+                            <div class="px-10 mb-8">
+                                ${showResults ? `
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div class="bg-slate-50 rounded-2xl p-5 border border-slate-100">
+                                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Turnout</p>
+                                            <p class="text-2xl font-black text-slate-800">${totalVotes}</p>
+                                        </div>
+                                        <div class="bg-blue-600 rounded-2xl p-5 shadow-lg shadow-blue-200">
+                                            <p class="text-[10px] font-bold text-blue-200 uppercase tracking-widest leading-none">${isClosed ? 'Winner' : 'Leading'}</p>
+                                            <p class="text-xl font-black text-white truncate mt-1">${winnerName}</p>
+                                        </div>
+                                    </div>
+                                ` : `
+                                    <div class="bg-slate-900 rounded-2xl p-6 flex items-center justify-between border-b-4 border-blue-600 shadow-xl">
+                                        <div>
+                                            <p class="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em]">Ballot Status</p>
+                                            <p class="text-white font-bold mt-1">🔒 Results are Private</p>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="text-slate-500 text-[10px] font-black uppercase">Turnout</p>
+                                            <p class="text-white font-black">${totalVotes}</p>
+                                        </div>
+                                    </div>
+                                `}
                             </div>
 
-                            <!-- Vote Buttons / Results List -->
-                            <div class="px-8 space-y-3 mb-8">
+                            <!-- CANDIDATE LIST -->
+                            <div class="px-10 space-y-3 mb-10">
                                 ${poll.options.map((opt, i) => {
                                     const percentage = totalVotes > 0 ? Math.round((poll.results[i] / totalVotes) * 100) : 0;
                                     return `
                                         <button 
                                             ${isClosed ? 'disabled' : ''} 
                                             onclick="vote('${poll.id}', ${i})" 
-                                            class="group relative w-full overflow-hidden rounded-2xl border transition-all 
-                                            ${isClosed ? 'bg-slate-50 cursor-default border-slate-100' : 'bg-white hover:border-blue-500 hover:shadow-md border-slate-200 active:scale-95'}">
+                                            class="group relative w-full overflow-hidden rounded-2xl border-2 transition-all p-5 text-left
+                                            ${isClosed ? 'bg-slate-50 cursor-default border-slate-100' : 'bg-white hover:border-blue-500 border-slate-100 active:scale-[0.98]'}">
                                             
-                                            <!-- Percentage Bar (Only visible if votes exist) -->
-                                            <div class="absolute inset-y-0 left-0 bg-blue-500 transition-all duration-1000 ${isClosed ? 'opacity-20' : 'opacity-10'}" style="width: ${percentage}%"></div>
+                                            <!-- Result Bar: Only visible if Admin published results -->
+                                            ${showResults ? `<div class="absolute inset-y-0 left-0 bg-blue-500 opacity-10 transition-all duration-1000" style="width: ${percentage}%"></div>` : ''}
                                             
-                                            <div class="relative p-4 flex justify-between items-center z-0">
-                                                <span class="font-bold text-slate-700 ${!isClosed ? 'group-hover:text-blue-600' : ''}">${opt}</span>
-                                                <div class="text-right">
-                                                    <span class="block text-sm font-black text-slate-800">${poll.results[i]}</span>
-                                                    <span class="block text-[10px] font-bold text-slate-400">${percentage}%</span>
-                                                </div>
+                                            <div class="relative flex justify-between items-center z-10">
+                                                <span class="font-black text-slate-700 tracking-tight text-lg">${opt}</span>
+                                                ${showResults ? `
+                                                    <div class="text-right">
+                                                        <span class="block text-blue-600 font-black">${percentage}%</span>
+                                                        <span class="block text-[10px] font-bold text-slate-400">${poll.results[i]} Votes</span>
+                                                    </div>
+                                                ` : `<span class="w-6 h-6 rounded-full border-2 border-slate-200 group-hover:border-blue-500 flex items-center justify-center text-[10px] font-black text-transparent group-hover:text-blue-500">✓</span>`}
                                             </div>
                                         </button>
                                     `;
                                 }).join('')}
                             </div>
 
-                            <!-- Chart Visualization -->
-                            <div class="p-8 pt-0 bg-slate-50/50">
-                                <canvas id="chart-${poll.id}" height="180"></canvas>
-                            </div>
+                            <!-- VISUALIZATION: Only if Admin published results -->
+                            ${showResults ? `
+                                <div class="p-10 pt-0 bg-slate-50/50">
+                                    <div class="h-40">
+                                        <canvas id="chart-${poll.id}"></canvas>
+                                    </div>
+                                </div>
+                            ` : ''}
                         </div>
                     `;
                 }).join('');
 
-                // Render all charts after HTML is injected
-                polls.forEach(renderChart);
-            } catch (e) {
-                console.error("Dashboard Init Error", e);
-            }
+                polls.forEach(p => { if(p.showResults) renderChart(p); });
+            } catch (e) { console.error(e); }
         }
 
         function renderChart(poll) {
             const ctx = document.getElementById(`chart-${poll.id}`);
-            // Destroy existing chart if it exists to allow refreshing
+            if (!ctx) return;
             if (charts[poll.id]) charts[poll.id].destroy();
 
             charts[poll.id] = new Chart(ctx, {
@@ -144,23 +165,20 @@
                     labels: poll.options,
                     datasets: [{
                         data: poll.results,
-                        backgroundColor: poll.status === 'closed' ? '#cbd5e1' : '#3b82f6',
-                        borderRadius: 8,
-                        borderSkipped: false
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 10
                     }]
                 },
                 options: {
                     indexAxis: 'y',
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { 
-                        legend: { display: false } 
-                    },
+                    plugins: { legend: { display: false } },
                     scales: {
-                        x: { display: false, grid: { display: false } },
+                        x: { display: false },
                         y: { 
                             grid: { display: false },
-                            ticks: { font: { weight: 'bold', size: 10 } }
+                            ticks: { font: { weight: 'bold', size: 11 } }
                         }
                     }
                 }
@@ -168,13 +186,13 @@
         }
 
         async function vote(pollId, optionIndex) {
-            if (!confirm("Confirm your vote? This action is permanent and recorded on the blockchain (simulated).")) return;
+            const secret = prompt("To confirm your anonymous vote, please type 'CONFIRM':");
+            if (secret !== "CONFIRM") return alert("Ballot cancelled.");
             
             try {
-                // Show temporary overlay to prevent multiple clicks
                 const status = document.createElement('div');
-                status.className = "fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center text-white font-bold";
-                status.innerHTML = "Processing Vote on GitHub Actions... (approx 15s)";
+                status.className = "fixed inset-0 bg-slate-900/90 backdrop-blur-md z-50 flex flex-col items-center justify-center text-white font-bold";
+                status.innerHTML = `<div class="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>Encrypting Ballot...`;
                 document.body.appendChild(status);
 
                 await dispatchAction('vote', { 
@@ -183,9 +201,10 @@
                     optionIndex 
                 });
                 
+                alert("Your vote has been securely cast. Results will be visible once the election administrator releases the final count.");
                 location.reload();
             } catch (e) { 
-                alert("Voting Error: " + e); 
+                alert("Error: " + e); 
                 location.reload();
             }
         }
@@ -195,11 +214,8 @@
             window.location.replace('index.html');
         }
         
-        // Initial dashboard load
         initDashboard();
-
-        // Refresh statistics every 20 seconds to show live vote updates
-        setInterval(initDashboard, 20000);
+        setInterval(initDashboard, 30000); // 30s refresh for turnout updates
     </script>
 </body>
 </html>
