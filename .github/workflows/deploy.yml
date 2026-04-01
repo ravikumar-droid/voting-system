@@ -15,10 +15,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Inject Secret
+      - name: Inject Secrets
+        env:
+          MY_TOKEN: ${{ secrets.GH_PAT }}
+          MY_USER: ${{ github.repository_owner }}
+          MY_REPO: ${{ github.event.repository.name }}
         run: |
-          # We are searching for "TOKEN_PLACEHOLDER" and replacing it with your Secret GH_PAT
-          sed -i 's/TOKEN_PLACEHOLDER/${{ secrets.GH_PAT }}/g' js/api.js
+          # We use '|' as a delimiter to avoid issues with special characters in tokens
+          sed -i "s|PLACEHOLDER_TOKEN|$MY_TOKEN|g" js/api.js
+          sed -i "s|PLACEHOLDER_USER|$MY_USER|g" js/api.js
+          sed -i "s|PLACEHOLDER_REPO|$MY_REPO|g" js/api.js
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
