@@ -1,12 +1,11 @@
 // js/api.js
+console.log("✅ api.js has loaded successfully!");
 
-// 1. CONFIGURATION (The Deployer fills these)
+// 1. CONFIGURATION
 const GH_OWNER = "ravikumar-droid"; 
 const GH_REPO = "voting-system"; 
 const GH_PAT = "PLACEHOLDER_TOKEN"; 
-
-// 2. YOUR SECRET GIST ID (Replace this manually with your actual Gist ID)
-const GIST_ID = "PASTE_YOUR_GIST_ID_HERE"; 
+const GIST_ID = "PASTE_YOUR_GIST_ID_HERE"; // <--- PUT YOUR GIST ID HERE
 
 const workflows = {
     'login': 'auth.yml',
@@ -16,13 +15,13 @@ const workflows = {
     'admin_approve_user': 'admin.yml'
 };
 
-// 3. THE MISSING FUNCTION: dispatchAction
+// 2. THE CORE FUNCTION
 async function dispatchAction(actionType, payload) {
+    console.log(`🚀 Attempting to dispatch: ${actionType}`);
+    
     const requestId = crypto.randomUUID();
     const fullPayload = { ...payload, requestId, actionType };
     const workflowFile = workflows[actionType];
-
-    console.log(`🚀 Dispatching ${actionType}...`);
 
     const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${workflowFile}/dispatches`, {
         method: 'POST',
@@ -37,13 +36,16 @@ async function dispatchAction(actionType, payload) {
         })
     });
 
-    if (!res.ok) throw new Error("Backend connection failed. Status: " + res.status);
+    if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.error("GH API Error:", errData);
+        throw new Error("Backend connection failed. Status: " + res.status);
+    }
     
-    // After sending the request, start looking for the answer in the Gist
     return await pollForResponse(requestId);
 }
 
-// 4. POLLING FUNCTION (Checks the Gist for the answer)
+// 3. THE POLLING FUNCTION
 async function pollForResponse(requestId) {
     const responseUrl = `https://api.github.com/gists/${GIST_ID}`;
     
@@ -53,7 +55,7 @@ async function pollForResponse(requestId) {
             attempts++;
             if (attempts > 30) { 
                 clearInterval(interval); 
-                reject("Timeout: The backend is taking too long."); 
+                reject("Timeout: Backend is taking too long."); 
             }
             
             try {
@@ -63,31 +65,32 @@ async function pollForResponse(requestId) {
                 const gistData = await res.json();
                 const fileName = `res-${requestId}.json`;
                 
-                // If the backend has finished, it will have created this file in the Gist
                 if (gistData.files && gistData.files[fileName]) {
                     const data = JSON.parse(gistData.files[fileName].content);
                     clearInterval(interval);
                     data.status === 200 ? resolve(data) : reject(data.error);
                 }
             } catch (e) { 
-                console.log("Waiting for backend response..."); 
+                console.log("Checking for response..."); 
             }
-        }, 2000); // Check every 2 seconds
+        }, 2000);
     });
 }
 
-// 5. HELPER: Fetch Poll Results
+// 4. HELPER: Fetch Poll Results
 async function fetchPollResults() {
-    // We check the Gist for the latest polls too
     const responseUrl = `https://api.github.com/gists/${GIST_ID}`;
     try {
         const res = await fetch(responseUrl, {
             headers: { 'Authorization': `token ${GH_PAT}` }
         });
         const gistData = await res.json();
-        return JSON.parse(gistData.files['public_polls.json'].content);
+        // Ensure this file exists in your Gist!
+        if (gistData.files['public_polls.json']) {
+            return JSON.parse(gistData.files['public_polls.json'].content);
+        }
+        return [];
     } catch (e) {
-        console.error("Failed to load polls:", e);
         return [];
     }
 }
