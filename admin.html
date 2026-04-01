@@ -9,67 +9,66 @@
 </head>
 <body class="bg-slate-50 min-h-screen font-sans text-slate-900">
 
-    <nav class="bg-white border-b sticky top-0 z-10 p-4 shadow-sm">
+    <nav class="bg-white border-b sticky top-0 z-20 p-4 shadow-sm">
         <div class="max-w-6xl mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-black text-blue-600 tracking-tighter">ADMIN TERMINAL</h1>
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black text-xl italic">A</div>
+                <h1 class="text-xl font-black text-slate-900 tracking-tighter uppercase">Admin Terminal</h1>
+            </div>
             <div class="flex gap-4">
-                <a href="dashboard.html" class="bg-slate-100 px-4 py-2 rounded-lg font-bold text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all">View Live Results</a>
-                <button onclick="localStorage.clear(); location.href='index.html'" class="text-red-500 font-bold px-4 py-2">Logout</button>
+                <a href="dashboard.html" class="bg-slate-100 px-4 py-2 rounded-lg font-bold text-slate-600 hover:text-blue-600 transition-all border border-slate-200">User Dashboard</a>
+                <button onclick="logout()" class="text-red-500 font-bold px-4 py-2 hover:bg-red-50 rounded-lg">Logout</button>
             </div>
         </div>
     </nav>
 
     <main class="max-w-6xl mx-auto p-6 lg:p-10">
         
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
             
-            <!-- LEFT COLUMN: CREATE POLL -->
+            <!-- LEFT: CREATE NEW ELECTION -->
             <div class="lg:col-span-1 space-y-8">
-                <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 class="text-xl font-bold mb-6 flex items-center gap-2">
-                        <span class="w-2 h-6 bg-blue-600 rounded-full"></span>
-                        Create New Election
-                    </h2>
+                <div class="bg-white p-8 rounded-[2rem] shadow-xl shadow-slate-200/50 border-2 border-white">
+                    <h2 class="text-2xl font-black mb-6 text-slate-800">New Election</h2>
                     <div class="space-y-4">
                         <div>
-                            <label class="text-xs font-bold text-slate-400 uppercase">Question</label>
-                            <input type="text" id="pollQ" placeholder="e.g. Who should be Class Rep?" class="w-full mt-1 border p-3 rounded-xl bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ballot Question</label>
+                            <input type="text" id="pollQ" placeholder="e.g. 2024 Presidential Election" class="w-full mt-1 border-2 border-slate-100 p-4 rounded-2xl bg-slate-50 focus:border-blue-500 outline-none transition-all font-bold">
                         </div>
                         <div>
-                            <label class="text-xs font-bold text-slate-400 uppercase">Candidates / Options</label>
-                            <textarea id="pollO" placeholder="Option 1, Option 2, Option 3" class="w-full mt-1 border p-3 rounded-xl bg-slate-50 h-24 focus:ring-2 focus:ring-blue-500 outline-none transition-all"></textarea>
-                            <p class="text-[10px] text-slate-400 mt-1 italic">* Separate names with commas</p>
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Candidates</label>
+                            <textarea id="pollO" placeholder="Gojo, Doraemon, Naruto" class="w-full mt-1 border-2 border-slate-100 p-4 rounded-2xl bg-slate-50 h-28 focus:border-blue-500 outline-none transition-all font-bold"></textarea>
+                            <p class="text-[10px] text-slate-400 mt-2 italic px-1 font-medium">Results are hidden from voters by default.</p>
                         </div>
-                        <button onclick="createNewPoll()" class="w-full bg-blue-600 text-white font-black py-4 rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95">
-                            PUBLISH ELECTION
+                        <button onclick="createNewPoll()" class="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl shadow-slate-300 hover:bg-blue-600 transition-all active:scale-95 uppercase tracking-widest">
+                            Start Blind Election
                         </button>
                     </div>
                 </div>
 
-                <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 class="text-xl font-bold mb-6">User Database</h2>
-                    <div id="userList" class="space-y-3 max-h-64 overflow-y-auto pr-2">
-                        <p class="text-slate-400 animate-pulse">Syncing users...</p>
+                <div class="bg-white p-8 rounded-[2rem] shadow-xl shadow-slate-200/50 border-2 border-white">
+                    <h2 class="text-xl font-black mb-6 text-slate-800">Verified Voters</h2>
+                    <div id="userList" class="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                        <p class="text-slate-400 font-bold animate-pulse text-xs">Syncing encrypted user IDs...</p>
                     </div>
                 </div>
             </div>
 
-            <!-- RIGHT COLUMN: MANAGE LIVE ELECTIONS & STATS -->
+            <!-- RIGHT: ELECTION CONTROL CENTER -->
             <div class="lg:col-span-2">
-                <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 min-h-[600px]">
-                    <div class="flex justify-between items-center mb-8">
-                        <h2 class="text-2xl font-bold flex items-center gap-2">
-                            <span class="w-2 h-6 bg-emerald-500 rounded-full"></span>
-                            Live Election Management
-                        </h2>
-                        <button onclick="refreshData()" class="text-blue-600 text-sm font-bold hover:bg-blue-50 px-3 py-1 rounded">Refresh Data</button>
+                <div class="bg-white p-10 rounded-[2.5rem] shadow-2xl shadow-slate-200/60 border-2 border-white min-h-[700px]">
+                    <div class="flex justify-between items-center mb-10">
+                        <h2 class="text-3xl font-black text-slate-800 tracking-tight">Control Center</h2>
+                        <button onclick="refreshData()" class="bg-blue-50 text-blue-600 text-xs font-black px-4 py-2 rounded-xl hover:bg-blue-100 border border-blue-100 uppercase tracking-widest">Refresh Database</button>
                     </div>
 
-                    <div id="adminPollsList" class="grid grid-cols-1 gap-6">
+                    <div id="adminPollsList" class="space-y-8">
                         <!-- Poll Management Cards Injected Here -->
-                        <div class="flex flex-col items-center justify-center py-20 text-slate-300">
-                            <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
-                            <p class="font-bold">No elections found in database.</p>
+                        <div class="flex flex-col items-center justify-center py-32 text-slate-300">
+                            <div class="w-20 h-20 mb-4 border-4 border-dashed border-slate-200 rounded-full flex items-center justify-center">
+                                <span class="text-4xl">∅</span>
+                            </div>
+                            <p class="font-black uppercase tracking-widest text-xs">No Active Elections</p>
                         </div>
                     </div>
                 </div>
@@ -78,40 +77,49 @@
     </main>
 
     <script>
-        // 1. Security & Auth Check
-        if (localStorage.getItem('role') !== 'admin') {
-            window.location.replace('index.html');
-        }
+        // 1. Auth Guard
+        if (localStorage.getItem('role') !== 'admin') window.location.replace('index.html');
 
         async function createNewPoll() {
             const q = document.getElementById('pollQ').value;
             const oStr = document.getElementById('pollO').value;
-            if(!q || !oStr) return alert("Please fill in all fields.");
+            if(!q || !oStr) return alert("All fields are mandatory.");
             
             const options = oStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
-            if(options.length < 2) return alert("At least 2 candidates are required.");
+            if(options.length < 2) return alert("At least 2 candidates needed.");
 
             try {
-                alert("Requesting GitHub to start election... (takes ~15s)");
-                await dispatchAction('admin_create_poll', { 
-                    token: localStorage.getItem('token'), 
-                    question: q, 
-                    options: options 
-                });
+                showGlobalLoader("Initializing Blind Ballot...");
+                await dispatchAction('admin_create_poll', { token: localStorage.getItem('token'), question: q, options: options });
                 location.reload();
-            } catch (e) { alert("Admin Error: " + e); }
+            } catch (e) { alert(e); location.reload(); }
         }
 
         async function toggleElectionStatus(pollId) {
-            if(!confirm("Change election status? Users cannot vote in closed elections.")) return;
+            if(!confirm("Toggle Election Status? Users cannot vote when an election is stopped.")) return;
             try {
-                alert("Updating status...");
-                await dispatchAction('admin_toggle_poll', { 
-                    token: localStorage.getItem('token'), 
-                    pollId: pollId 
-                });
+                showGlobalLoader("Updating Election State...");
+                await dispatchAction('admin_toggle_poll', { token: localStorage.getItem('token'), pollId });
                 location.reload();
-            } catch (e) { alert(e); }
+            } catch (e) { alert(e); location.reload(); }
+        }
+
+        async function toggleResultsVisibility(pollId) {
+            if(!confirm("Declare Results? This will reveal the winner and all charts to every user dashboard.")) return;
+            try {
+                showGlobalLoader("Publishing Results to Voters...");
+                await dispatchAction('admin_toggle_results', { token: localStorage.getItem('token'), pollId });
+                location.reload();
+            } catch (e) { alert(e); location.reload(); }
+        }
+
+        async function deletePoll(pollId) {
+            if(!confirm("Permanently delete this election and all associated votes?")) return;
+            try {
+                showGlobalLoader("Wiping Election Data...");
+                await dispatchAction('admin_delete_poll', { token: localStorage.getItem('token'), pollId });
+                location.reload();
+            } catch (e) { alert(e); location.reload(); }
         }
 
         async function refreshData() {
@@ -125,7 +133,7 @@
 
                 renderPolls(polls);
                 renderUsers(users);
-            } catch (e) { console.error("Data Sync Failed", e); }
+            } catch (e) { console.error("Database Sync Error", e); }
         }
 
         function renderPolls(polls) {
@@ -134,47 +142,68 @@
 
             container.innerHTML = polls.map(poll => {
                 const totalVotes = poll.results.reduce((a, b) => a + b, 0);
-                const maxVotes = Math.max(...poll.results);
-                const winnerIndex = poll.results.indexOf(maxVotes);
-                const winnerName = totalVotes > 0 ? poll.options[winnerIndex] : "None";
                 const isClosed = poll.status === 'closed';
+                const resultsPublic = poll.showResults === true;
+                
+                const maxVotes = Math.max(...poll.results);
+                const winnerName = totalVotes > 0 ? poll.options[poll.results.indexOf(maxVotes)] : "No Data";
 
                 return `
-                    <div class="border rounded-2xl p-6 transition-all ${isClosed ? 'bg-slate-50 border-slate-200' : 'bg-white border-blue-100 shadow-sm'}">
-                        <div class="flex justify-between items-start mb-4">
+                    <div class="border-2 rounded-[2rem] p-8 transition-all ${isClosed ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-100 shadow-xl shadow-slate-100'}">
+                        <div class="flex justify-between items-start mb-6">
                             <div>
-                                <h3 class="text-lg font-bold text-slate-800">${poll.question}</h3>
-                                <p class="text-xs font-bold ${isClosed ? 'text-red-500' : 'text-emerald-500'} uppercase tracking-widest mt-1">
-                                    ● ${isClosed ? 'Election Ended' : 'Live Now'}
-                                </p>
+                                <h3 class="text-xl font-black text-slate-800 tracking-tight">${poll.question}</h3>
+                                <div class="flex gap-2 mt-2">
+                                    <span class="text-[10px] font-black px-2 py-0.5 rounded-md uppercase ${isClosed ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}">
+                                        ${isClosed ? 'Stopped' : 'Active'}
+                                    </span>
+                                    <span class="text-[10px] font-black px-2 py-0.5 rounded-md uppercase ${resultsPublic ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}">
+                                        ${resultsPublic ? 'Results Public' : 'Results Private'}
+                                    </span>
+                                </div>
                             </div>
-                            <button onclick="toggleElectionStatus('${poll.id}')" 
-                                class="px-4 py-2 rounded-lg text-xs font-black uppercase transition-all ${isClosed ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-red-500 text-white hover:bg-red-600'}">
-                                ${isClosed ? 'Open Election' : 'Stop Election'}
+                            <button onclick="deletePoll('${poll.id}')" class="text-slate-300 hover:text-red-500 transition-colors">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                             </button>
                         </div>
 
-                        <div class="grid grid-cols-3 gap-4 mb-6">
-                            <div class="bg-white border rounded-xl p-3 text-center">
-                                <p class="text-[10px] uppercase font-bold text-slate-400">Turnout</p>
-                                <p class="text-xl font-black">${totalVotes}</p>
+                        <!-- PRIVATE STATS FOR ADMIN ONLY -->
+                        <div class="grid grid-cols-2 gap-4 mb-8">
+                            <div class="bg-white border-2 border-slate-50 rounded-2xl p-4">
+                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Turnout</p>
+                                <p class="text-2xl font-black text-slate-800 mt-1">${totalVotes}</p>
                             </div>
-                            <div class="bg-white border rounded-xl p-3 text-center col-span-2 border-l-4 border-l-blue-500">
-                                <p class="text-[10px] uppercase font-bold text-slate-400 text-left pl-2">Current Winner</p>
-                                <p class="text-lg font-black text-blue-600 text-left pl-2 truncate">${winnerName}</p>
+                            <div class="bg-white border-2 border-slate-50 rounded-2xl p-4">
+                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Leading Candidate</p>
+                                <p class="text-lg font-black text-blue-600 mt-1 truncate">${winnerName}</p>
                             </div>
                         </div>
 
-                        <div class="space-y-2">
+                        <!-- CONTROL BUTTONS -->
+                        <div class="grid grid-cols-2 gap-3 mb-8">
+                            <button onclick="toggleElectionStatus('${poll.id}')" 
+                                class="w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all 
+                                ${isClosed ? 'border-emerald-500 text-emerald-600 hover:bg-emerald-50' : 'border-red-500 text-red-500 hover:bg-red-50'}">
+                                ${isClosed ? 'Re-Open Election' : 'Stop Election'}
+                            </button>
+                            <button onclick="toggleResultsVisibility('${poll.id}')" 
+                                class="w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all 
+                                ${resultsPublic ? 'border-slate-800 text-slate-800 hover:bg-slate-800 hover:text-white' : 'border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white'}">
+                                ${resultsPublic ? 'Hide Results from Users' : 'Reveal Final Results'}
+                            </button>
+                        </div>
+
+                        <!-- BREAKDOWN -->
+                        <div class="space-y-2 pt-6 border-t border-slate-100">
                             ${poll.options.map((opt, i) => {
                                 const percent = totalVotes > 0 ? Math.round((poll.results[i] / totalVotes) * 100) : 0;
                                 return `
-                                    <div class="relative w-full h-8 bg-slate-100 rounded-lg overflow-hidden border">
-                                        <div class="absolute inset-0 bg-blue-500 opacity-20" style="width: ${percent}%"></div>
-                                        <div class="absolute inset-0 flex justify-between items-center px-3 text-xs font-bold">
-                                            <span>${opt}</span>
-                                            <span>${poll.results[i]} votes (${percent}%)</span>
-                                        </div>
+                                    <div class="flex justify-between items-center text-xs font-bold">
+                                        <span class="text-slate-500">${opt}</span>
+                                        <span class="text-slate-800">${poll.results[i]} votes (${percent}%)</span>
+                                    </div>
+                                    <div class="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
+                                        <div class="bg-blue-500 h-full transition-all duration-1000" style="width: ${percent}%"></div>
                                     </div>
                                 `;
                             }).join('')}
@@ -187,19 +216,26 @@
         function renderUsers(users) {
             const container = document.getElementById('userList');
             container.innerHTML = users.map(u => `
-                <div class="flex justify-between items-center p-3 rounded-xl border bg-slate-50">
-                    <div class="truncate pr-4">
-                        <p class="text-sm font-bold text-slate-700">${u.username}</p>
-                        <p class="text-[10px] text-slate-400 font-bold uppercase">${u.role}</p>
+                <div class="flex justify-between items-center p-4 rounded-2xl border-2 border-slate-50 bg-slate-50/50">
+                    <div>
+                        <p class="text-sm font-black text-slate-800 leading-none mb-1">${u.username}</p>
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">${u.role}</p>
                     </div>
-                    <span class="text-[10px] font-black px-2 py-1 rounded bg-white border text-slate-500 uppercase">${u.status}</span>
+                    <span class="text-[8px] font-black px-2 py-1 rounded bg-white border border-slate-100 text-slate-500 uppercase tracking-tighter">${u.status}</span>
                 </div>
             `).join('');
         }
 
-        // Initial Load
+        function showGlobalLoader(msg) {
+            const status = document.createElement('div');
+            status.className = "fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] flex flex-col items-center justify-center text-white font-bold";
+            status.innerHTML = `<div class="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>${msg}`;
+            document.body.appendChild(status);
+        }
+
+        function logout() { localStorage.clear(); location.href='index.html'; }
+
         refreshData();
-        // Auto-refresh stats every 30 seconds
         setInterval(refreshData, 30000);
     </script>
 </body>
