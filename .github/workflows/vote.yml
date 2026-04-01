@@ -1,43 +1,92 @@
-name: Process Vote
+name: Vote Backend (Gist DB)
 on:
-  repository_dispatch:
-    types: [vote]
+  workflow_dispatch:
+    inputs:
+      payload:
+        required: true
+
+permissions:
+  contents: write 
+
+# Prevents multiple votes from overriding each other
+concurrency: 
+  group: gist-database-lock
+  cancel-in-progress: false 
 
 jobs:
-  process-vote:
+  vote-logic:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
-      - run: npm install mongodb
-      - env:
-          MONGO_URI: ${{ secrets.MONGO_URI }}
-          PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+        with: { node-version: 18 }
+
+      - name: Process Vote
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          PAYLOAD: ${{ github.event.inputs.payload }}
         run: |
-          cat << 'EOF' > index.js
-          const { MongoClient, ObjectId } = require('mongodb');
+          cat << 'EOF' > vote.js
+          const fs = require('fs');
+
           async function run() {
             const payload = JSON.parse(process.env.PAYLOAD);
-            const client = new MongoClient(process.env.MONGO_URI);
-            await client.connect();
-            const db = client.db('voting_db');
-            
+            const gistUrl = `https://api.github.com/gists/${process.env.GIST_ID}`;
+            const headers = { 'Authorization': `token ${process.env.GIST_TOKEN}`, 'Accept': 'application/vnd.github.v3+json' };
+            let responseData = {};
+
             try {
-              // Auth check
-              const user = await db.collection('Users').findOne({ token: payload.token });
-              if (!user || user.status !== 'approved') throw new Error("Unauthorized");
+              // 1. Fetch Secret Gist Data
+              const gistReq = await fetch(gistUrl, { headers });
+              const gistData = await gistReq.json();
               
-              // Duplicate check
-              const hasVoted = await db.collection('Votes').findOne({ pollId: payload.pollId, userId: user._id.toString() });
-              if (hasVoted) throw new Error("Already voted on this poll");
+              let users = JSON.parse(gistData.files['users.json']?.content || '[]');
+              let polls = JSON.parse(gistData.files['polls.json']?.content || '[{"id":"poll_1","question":"Tabs or Spaces?","options":["Tabs","Spaces"]}]');
+              let votes = JSON.parse(gistData.files['votes.json']?.content || '[]');
+
+              // 2. Security Checks
+              const user = users.find(u => u.token === payload.token);
+              if (!user) throw new Error("Unauthorized. Please log in again.");
+
+              const hasVoted = votes.find(v => v.pollId === payload.pollId && v.userId === user.id);
+              if (hasVoted) throw new Error("You have already voted on this poll!");
+
+              // 3. Save Vote
+              votes.push({ pollId: payload.pollId, userId: user.id, optionIndex: payload.optionIndex });
+
+              // 4. Save Back to Secret Gist
+              await fetch(gistUrl, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({ files: { 'votes.json': { content: JSON.stringify(votes, null, 2) }, 'polls.json': { content: JSON.stringify(polls, null, 2) } } })
+              });
+
+              // 5. Calculate Anonymous Public Data
+              const publicPolls = polls.map(p => {
+                const pollVotes = votes.filter(v => v.pollId === p.id);
+                const results = p.options.map((_, idx) => pollVotes.filter(v => v.optionIndex === idx).length);
+                return { id: p.id, question: p.question, options: p.options, results };
+              });
               
-              await db.collection('Votes').insertOne({ pollId: payload.pollId, userId: user._id.toString(), optionIndex: payload.optionIndex });
-              await db.collection('Responses').insertOne({ requestId: payload.requestId, status: 200, data: { message: "Vote cast successfully" }});
-            } catch (error) {
-              await db.collection('Responses').insertOne({ requestId: payload.requestId, status: 400, data: { error: error.message }});
-            } finally {
-              await client.close();
-            }
+              fs.mkdirSync('./api', { recursive: true });
+              fs.writeFileSync('./api/public_polls.json', JSON.stringify(publicPolls));
+              responseData = { status: 200, message: "Vote cast successfully!" };
+
+            } catch (error) { responseData = { status: 400, error: error.message }; }
+
+            fs.mkdirSync('./api/responses', { recursive: true });
+            fs.writeFileSync(`./api/responses/${payload.requestId}.json`, JSON.stringify(responseData));
           }
           run();
           EOF
-          node index.js
+          node vote.js
+
+      - name: Update Public Website (Anonymous Data Only)
+        run: |
+          git config --global user.name "Voting-Bot"
+          git config --global user.email "bot@voting"
+          git add api/
+          git commit -m "📊 Update public charts & response" || echo "No changes"
+          git pull --rebase origin main 
+          git push origin main
