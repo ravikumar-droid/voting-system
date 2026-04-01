@@ -1,12 +1,13 @@
+console.log("✅ api.js starting to load...");
 
+// 1. CONFIGURATION
 const GH_OWNER = "ravikumar-droid";
 const GH_REPO = "voting-system";
 const GH_PAT = "PLACEHOLDER_TOKEN";
-
-// 2. DATABASE CONFIGURATION
 const GIST_ID = "c5a19b5d804791fe34ce171d15b6f1f0";
 
-// 3. BACKEND WORKFLOW MAPPING
+// 2. BACKEND WORKFLOW MAPPING
+// Each line MUST end with a comma EXCEPT the last one.
 const workflows = {
     "login": "auth.yml",
     "register": "auth.yml",
@@ -18,6 +19,8 @@ const workflows = {
     "admin_delete_poll": "admin.yml"
 };
 
+console.log("✅ workflows loaded successfully");
+
 /**
  * Sends a request to GitHub Actions (The Backend)
  */
@@ -26,7 +29,7 @@ async function dispatchAction(actionType, payload) {
     const workflowFile = workflows[actionType];
     
     if (!workflowFile) {
-        throw new Error("Action not found in workflow map.");
+        throw new Error("Action not found in workflow map: " + actionType);
     }
 
     const fullPayload = { 
@@ -92,7 +95,7 @@ async function pollForResponse(requestId) {
                     }
                 }
             } catch (e) { 
-                // Ignore errors during polling
+                // Quietly retry
             }
         }, 3000);
     });
@@ -109,7 +112,7 @@ async function fetchPollResults() {
         });
         const gistData = await res.json();
         
-        if (gistData.files["public_polls.json"]) {
+        if (gistData.files && gistData.files["public_polls.json"]) {
             return JSON.parse(gistData.files["public_polls.json"].content);
         }
         return [];
@@ -118,3 +121,5 @@ async function fetchPollResults() {
         return [];
     }
 }
+
+console.log("✅ api.js fully ready!");
