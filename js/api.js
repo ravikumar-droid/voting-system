@@ -8,8 +8,7 @@
 // REPLACE THESE MANUALLY FOR NOW
 const GH_OWNER = "ravikumar-droid"; 
 const GH_REPO = "voting-system"; 
-const GH_PAT = "TOKEN_INJECTED_BY_ACTION"; 
-
+const GH_PAT = "TOKEN_PLACEHOLDER";
 // ... (rest of your api.js code)
 
 // Maps frontend actions to their specific .yml backend files
