@@ -32,17 +32,24 @@
         // Inside index.html script
 async function handleAuth(type) {
     const statusMsg = document.getElementById('statusMsg');
+    const u = document.getElementById('username').value;
+    const p = document.getElementById('password').value;
+
+    document.getElementById('statusBox').classList.remove('hidden');
+    statusMsg.innerText = "Connecting to Secure Backend...";
+
     try {
         const res = await dispatchAction(type, { username: u, password: p });
         
         if (type === 'login') {
+            // STORE EVERYTHING
             localStorage.setItem('token', res.token);
             localStorage.setItem('username', res.username);
-            localStorage.setItem('role', res.role || 'user'); // Save the role!
+            localStorage.setItem('role', res.role || 'user');
 
-            statusMsg.innerText = "Login Success! Redirecting...";
+            statusMsg.innerText = "Redirecting...";
             
-            // RELIABLE REDIRECT
+            // USE REPLACE FOR CLEANER REDIRECT
             if (res.role === 'admin') {
                 window.location.replace('admin.html');
             } else {
