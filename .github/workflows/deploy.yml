@@ -1,32 +1,34 @@
-name: Deploy Frontend to Pages
+name: Secure Deploy
 on:
   push:
-    branches: [ main ] # Runs every time you push code
+    branches: [ main ]
 
+# Grant the necessary permissions for GitHub Pages
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Inject Secrets into JavaScript
-        env:
-          # Use the secret you stored in Settings > Secrets > Actions
-          MY_FRONTEND_TOKEN: ${{ secrets.GH_PAT }}
-          MY_USERNAME: ${{ github.repository_owner }}
-          MY_REPO: ${{ github.event.repository.name }}
+      - name: Inject Secret
         run: |
-          # Use 'sed' to find placeholders and replace them with real Secret values
-          sed -i "s/TOKEN_INJECTED_BY_ACTION/$MY_FRONTEND_TOKEN/g" js/api.js
-          sed -i "s/YOUR_GITHUB_USERNAME/$MY_USERNAME/g" js/api.js
-          sed -i "s/YOUR_REPO_NAME/$MY_REPO/g" js/api.js
+          # Replace the placeholder with your secret GH_PAT
+          sed -i "s/TOKEN_PLACEHOLDER/${{ secrets.GH_PAT }}/g" js/api.js
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+
+      - name: Upload Artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: '.' # Upload the root directory
 
       - name: Deploy to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          folder: . # Deploy the whole root folder
-          branch: gh-pages # Deploys to a separate branch for hosting
+        id: deployment
+        uses: actions/deploy-pages@v2
