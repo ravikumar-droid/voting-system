@@ -1,0 +1,43 @@
+name: Process Vote
+on:
+  repository_dispatch:
+    types: [vote]
+
+jobs:
+  process-vote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v3
+      - run: npm install mongodb
+      - env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+        run: |
+          cat << 'EOF' > index.js
+          const { MongoClient, ObjectId } = require('mongodb');
+          async function run() {
+            const payload = JSON.parse(process.env.PAYLOAD);
+            const client = new MongoClient(process.env.MONGO_URI);
+            await client.connect();
+            const db = client.db('voting_db');
+            
+            try {
+              // Auth check
+              const user = await db.collection('Users').findOne({ token: payload.token });
+              if (!user || user.status !== 'approved') throw new Error("Unauthorized");
+              
+              // Duplicate check
+              const hasVoted = await db.collection('Votes').findOne({ pollId: payload.pollId, userId: user._id.toString() });
+              if (hasVoted) throw new Error("Already voted on this poll");
+              
+              await db.collection('Votes').insertOne({ pollId: payload.pollId, userId: user._id.toString(), optionIndex: payload.optionIndex });
+              await db.collection('Responses').insertOne({ requestId: payload.requestId, status: 200, data: { message: "Vote cast successfully" }});
+            } catch (error) {
+              await db.collection('Responses').insertOne({ requestId: payload.requestId, status: 400, data: { error: error.message }});
+            } finally {
+              await client.close();
+            }
+          }
+          run();
+          EOF
+          node index.js
