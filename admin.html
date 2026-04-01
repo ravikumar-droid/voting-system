@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SecureVote | Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/api.js"></script>
+</head>
+<body class="bg-slate-100 min-h-screen p-10">
+    <div class="max-w-5xl mx-auto">
+        <header class="flex justify-between items-center mb-10">
+            <div>
+                <h1 class="text-4xl font-black text-slate-900">Admin Control</h1>
+                <p class="text-slate-500">Manage polls and user approvals</p>
+            </div>
+            <a href="dashboard.html" class="text-blue-600 font-bold hover:underline">View Dashboard →</a>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Create Poll -->
+            <div class="lg:col-span-1 bg-white p-8 rounded-2xl shadow-sm h-fit">
+                <h2 class="text-xl font-bold mb-6">Create New Poll</h2>
+                <div class="space-y-4">
+                    <input type="text" id="q" placeholder="Question?" class="w-full p-3 border rounded-lg bg-slate-50">
+                    <textarea id="o" placeholder="Options (comma separated)" class="w-full p-3 border rounded-lg bg-slate-50 h-24"></textarea>
+                    <button onclick="doAction('create')" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700">Publish Poll</button>
+                </div>
+            </div>
+
+            <!-- User List -->
+            <div class="lg:col-span-2 bg-white p-8 rounded-2xl shadow-sm">
+                <h2 class="text-xl font-bold mb-6">User Approvals</h2>
+                <div id="userList" class="divide-y divide-slate-100">
+                    <p class="py-4 text-slate-400 italic">No pending users found.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Basic Security Redirect
+        if (localStorage.getItem('role') !== 'admin') {
+            document.body.innerHTML = "<div class='text-center mt-20'><h1 class='text-3xl font-bold text-red-500'>Unauthorized Access</h1><a href='dashboard.html' class='text-blue-500 underline'>Back to safety</a></div>";
+        }
+
+        async function loadUsers() {
+            try {
+                const res = await fetch(`api/admin_user_list.json?t=${Date.now()}`);
+                if (!res.ok) return;
+                const users = await res.json();
+                const container = document.getElementById('userList');
+                container.innerHTML = users.map(u => `
+                    <div class="flex justify-between items-center py-4">
+                        <div>
+                            <p class="font-bold text-slate-800">${u.username}</p>
+                            <p class="text-xs text-slate-400 uppercase tracking-widest">${u.status}</p>
+                        </div>
+                        ${u.status === 'pending' ? 
+                            `<button onclick="doAction('approve', '${u.id}')" class="bg-green-100 text-green-700 px-4 py-2 rounded-lg font-bold text-sm hover:bg-green-200">Approve</button>` 
+                            : `<span class="text-slate-300 text-sm font-medium">Approved</span>`}
+                    </div>
+                `).join('');
+            } catch (e) {}
+        }
+
+        async function doAction(type, userId = null) {
+            try {
+                alert("Processing via GitHub Actions... Please wait.");
+                if (type === 'create') {
+                    const q = document.getElementById('q').value;
+                    const o = document.getElementById('o').value.split(',').map(s => s.trim());
+                    await dispatchAction('admin_create_poll', { token: localStorage.getItem('token'), question: q, options: o });
+                } else {
+                    await dispatchAction('admin_approve_user', { token: localStorage.getItem('token'), targetUserId: userId });
+                }
+                location.reload();
+            } catch (e) { alert(e); }
+        }
+
+        loadUsers();
+    </script>
+</body>
+</html>
