@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Serverless Voting - Auth</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/api.js" defer></script>
+    <script src="js/app.js" defer></script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 transition-colors flex items-center justify-center h-screen">
+    <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl w-96 text-gray-800 dark:text-gray-100">
+        <h2 class="text-2xl font-bold mb-6 text-center">Secure Voting Portal</h2>
+        
+        <form id="authForm" class="space-y-4">
+            <input type="text" id="username" placeholder="Username" class="w-full p-3 border rounded bg-gray-50 dark:bg-gray-700" required>
+            <input type="password" id="password" placeholder="Password" class="w-full p-3 border rounded bg-gray-50 dark:bg-gray-700" required>
+            <button type="button" onclick="handleLogin()" class="w-full bg-blue-600 text-white p-3 rounded hover:bg-blue-700">Login</button>
+            <button type="button" onclick="handleRegister()" class="w-full bg-green-600 text-white p-3 rounded hover:bg-green-700">Register</button>
+        </form>
+        <p id="statusMsg" class="mt-4 text-sm text-center font-semibold text-blue-500"></p>
+    </div>
+
+    <script>
+        async function handleLogin() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            document.getElementById('statusMsg').innerText = "Logging in... (Waking up GitHub Actions)";
+            
+            try {
+                const res = await dispatchAction('login', { username: u, password: p });
+                localStorage.setItem('token', res.token);
+                localStorage.setItem('userId', res.userId);
+                window.location.href = res.role === 'admin' ? 'admin.html' : 'dashboard.html';
+            } catch (e) {
+                document.getElementById('statusMsg').innerText = `Error: ${e}`;
+                document.getElementById('statusMsg').classList.replace('text-blue-500', 'text-red-500');
+            }
+        }
+
+        async function handleRegister() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            document.getElementById('statusMsg').innerText = "Registering... Please wait.";
+            
+            try {
+                const res = await dispatchAction('register', { username: u, password: p });
+                document.getElementById('statusMsg').innerText = res.message;
+            } catch (e) {
+                document.getElementById('statusMsg').innerText = `Error: ${e}`;
+            }
+        }
+    </script>
+</body>
+</html>
