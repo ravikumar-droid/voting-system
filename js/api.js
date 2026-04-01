@@ -17,7 +17,7 @@ const workflows = {
     'login': 'auth.yml',
     'register': 'auth.yml',
     'vote': 'vote.yml',
-    'admin_create_poll': 'admin.yml',
+    'admin_create_poll': 'admin.yml', // <--- Make sure this is 'admin.yml'
     'admin_approve_user': 'admin.yml'
 };
 
