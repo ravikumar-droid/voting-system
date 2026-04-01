@@ -1,79 +1,91 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>SecureVote | Admin Panel</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="js/api.js"></script>
-</head>
-<body class="bg-slate-100 p-10 font-sans">
-    <div class="max-w-4xl mx-auto">
-        <header class="flex justify-between items-center mb-10">
-            <h1 class="text-3xl font-bold text-slate-800">Admin Dashboard</h1>
-            <a href="dashboard.html" class="text-blue-600 font-semibold underline">View Dashboard</a>
-        </header>
+name: Admin Backend (Gist DB)
+on:
+  workflow_dispatch:
+    inputs:
+      payload:
+        required: true
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
-            <!-- POLL CREATOR -->
-            <div class="bg-white p-8 rounded-xl shadow-sm">
-                <h2 class="text-xl font-bold mb-4">Create New Poll</h2>
-                <div class="space-y-4">
-                    <input type="text" id="pollQ" placeholder="Poll Question" class="w-full border p-3 rounded-lg">
-                    <input type="text" id="pollO" placeholder="Options (comma separated)" class="w-full border p-3 rounded-lg">
-                    <button onclick="createNewPoll()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700">Publish Poll</button>
-                </div>
-            </div>
+permissions:
+  contents: write
 
-            <!-- USER LIST -->
-            <div class="bg-white p-8 rounded-xl shadow-sm">
-                <h2 class="text-xl font-bold mb-4">User Approvals</h2>
-                <div id="userList" class="space-y-3">
-                    <p class="text-slate-400">Fetching user list...</p>
-                </div>
-            </div>
-        </div>
-    </div>
+jobs:
+  admin-logic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
 
-    <script>
-        // Security Check
-        if (localStorage.getItem('role') !== 'admin') window.location.href = 'index.html';
-
-        async function createNewPoll() {
-            const q = document.getElementById('pollQ').value;
-            const o = document.getElementById('pollO').value.split(',').map(s => s.trim());
-            if(!q || o.length < 2) return alert("Enter question and at least 2 options");
-
+      - name: Process Admin Action
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          PAYLOAD: ${{ github.event.inputs.payload }}
+        run: |
+          node -e "
+          async function run() {
+            const payload = JSON.parse(process.env.PAYLOAD);
+            const gistId = process.env.GIST_ID;
+            const gistToken = process.env.GIST_TOKEN;
+            const gistUrl = 'https://api.github.com/gists/' + gistId;
+            const headers = { 'Authorization': 'token ' + gistToken, 'Accept': 'application/vnd.github.v3+json' };
+            
             try {
-                alert("Creating poll... please wait about 15s");
-                await dispatchAction('admin_create_poll', { 
-                    token: localStorage.getItem('token'), 
-                    question: q, 
-                    options: o 
-                });
-                alert("Success! Poll is live.");
-                location.reload();
-            } catch (e) { alert("Error: " + e); }
-        }
+              const gistReq = await fetch(gistUrl, { headers });
+              const gistData = await gistReq.json();
+              
+              let users = JSON.parse(gistData.files['users.json'].content);
+              let polls = JSON.parse(gistData.files['polls.json']?.content || '[]');
+              let responseData = {};
 
-        async function fetchUsers() {
-            try {
-                // We use our helper from api.js to get Gist data
-                const url = `https://api.github.com/gists/${GIST_ID}?t=${Date.now()}`;
-                const res = await fetch(url, { headers: { 'Authorization': `token ${GH_PAT}` } });
-                const gistData = await res.json();
-                const users = JSON.parse(gistData.files['users.json'].content);
-                
-                const container = document.getElementById('userList');
-                container.innerHTML = users.map(u => `
-                    <div class="flex justify-between items-center p-3 border-b">
-                        <span>${u.username}</span>
-                        <span class="text-xs px-2 py-1 bg-slate-100 rounded">${u.status}</span>
-                    </div>
-                `).join('');
-            } catch (e) { console.error(e); }
-        }
+              // SECURITY CHECK
+              const adminUser = users.find(u => u.token === payload.token && u.role === 'admin');
+              if (!adminUser) throw new Error('Unauthorized: Admin role required');
 
-        fetchUsers();
-    </script>
-</body>
-</html>
+              if (payload.actionType === 'admin_create_poll') {
+                const newPoll = { 
+                  id: 'poll_' + Date.now(), 
+                  question: payload.question, 
+                  options: payload.options, 
+                  results: payload.options.map(() => 0) 
+                };
+                polls.push(newPoll);
+                responseData = { status: 200, message: 'Poll created!' };
+              } 
+              
+              else if (payload.actionType === 'admin_approve_user') {
+                const user = users.find(u => u.id === payload.targetUserId);
+                if (user) user.status = 'approved';
+                responseData = { status: 200, message: 'User approved!' };
+              }
+
+              // Update public list for Admin UI
+              const publicUsers = users.map(u => ({ id: u.id, username: u.username, status: u.status }));
+
+              await fetch(gistUrl, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({
+                  files: {
+                    'users.json': { content: JSON.stringify(users, null, 2) },
+                    'polls.json': { content: JSON.stringify(polls, null, 2) },
+                    'public_polls.json': { content: JSON.stringify(polls, null, 2) },
+                    ['res-' + payload.requestId + '.json']: { content: JSON.stringify(responseData) }
+                  }
+                })
+              });
+              console.log('Admin Task Complete');
+            } catch (e) {
+              console.error(e);
+              // Write error to gist so frontend stops waiting
+              await fetch(gistUrl, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({
+                  files: { ['res-' + payload.requestId + '.json']: { content: JSON.stringify({ status: 400, error: e.message }) } }
+                })
+              });
+            }
+          }
+          run();
+          "
