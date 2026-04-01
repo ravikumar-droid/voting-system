@@ -1,0 +1,32 @@
+name: Deploy Frontend to Pages
+on:
+  push:
+    branches: [ main ] # Runs every time you push code
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Inject Secrets into JavaScript
+        env:
+          # Use the secret you stored in Settings > Secrets > Actions
+          MY_FRONTEND_TOKEN: ${{ secrets.GH_PAT }}
+          MY_USERNAME: ${{ github.repository_owner }}
+          MY_REPO: ${{ github.event.repository.name }}
+        run: |
+          # Use 'sed' to find placeholders and replace them with real Secret values
+          sed -i "s/TOKEN_INJECTED_BY_ACTION/$MY_FRONTEND_TOKEN/g" js/api.js
+          sed -i "s/YOUR_GITHUB_USERNAME/$MY_USERNAME/g" js/api.js
+          sed -i "s/YOUR_REPO_NAME/$MY_REPO/g" js/api.js
+
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: . # Deploy the whole root folder
+          branch: gh-pages # Deploys to a separate branch for hosting
