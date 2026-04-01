@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/api.js" defer></script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-8">
+    <div class="max-w-4xl mx-auto">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold">Active Polls</h1>
+            <button onclick="localStorage.clear(); window.location.href='index.html'" class="bg-red-500 text-white px-4 py-2 rounded">Logout</button>
+        </div>
+        
+        <div id="pollsContainer" class="grid gap-6">
+            <!-- Rendered via JS -->
+        </div>
+    </div>
+
+    <script>
+        // Fetch polls using MongoDB Data API directly (Read-only)
+        async function loadPolls() {
+            const res = await fetch(`${MONGO_DATA_URL}/find`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'api-key': MONGO_DATA_KEY },
+                body: JSON.stringify({ dataSource: CLUSTER_NAME, database: "voting_db", collection: "Polls" })
+            });
+            const { documents } = await res.json();
+            
+            const container = document.getElementById('pollsContainer');
+            container.innerHTML = documents.map(poll => `
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                    <h3 class="text-xl font-bold mb-4">${poll.question}</h3>
+                    <div class="space-y-2 mb-4">
+                        ${poll.options.map((opt, i) => `
+                            <button onclick="castVote('${poll._id}', ${i})" class="w-full text-left p-3 border rounded hover:bg-blue-50 dark:hover:bg-gray-700">
+                                ${opt}
+                            </button>
+                        `).join('')}
+                    </div>
+                    <canvas id="chart-${poll._id}" height="100"></canvas>
+                </div>
+            `).join('');
+            
+            loadCharts(documents); // function to load chart.js instances
+        }
+
+        async function castVote(pollId, optionIndex) {
+            alert("Voting... Please wait.");
+            try {
+                await dispatchAction('vote', { 
+                    token: localStorage.getItem('token'), 
+                    pollId, 
+                    optionIndex 
+                });
+                alert("Vote recorded!");
+                loadPolls(); // Reload results
+            } catch (e) {
+                alert(`Error: ${e}`);
+            }
+        }
+        
+        // Auto-refresh simulation
+        setInterval(loadPolls, 10000); 
+        loadPolls();
+    </script>
+</body>
+</html>
