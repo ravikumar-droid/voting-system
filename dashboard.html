@@ -2,69 +2,95 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard</title>
+    <title>SecureVote | Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="js/api.js" defer></script>
+    <script src="js/api.js"></script>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-8">
-    <div class="max-w-4xl mx-auto">
-        <div class="flex justify-between items-center mb-8">
-            <h1 class="text-3xl font-bold">Active Polls</h1>
-            <button onclick="localStorage.clear(); window.location.href='index.html'" class="bg-red-500 text-white px-4 py-2 rounded">Logout</button>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+    <nav class="bg-white border-b p-4 shadow-sm flex justify-between items-center px-10">
+        <h1 class="text-2xl font-bold text-blue-600">SecureVote</h1>
+        <div class="flex items-center gap-6">
+            <span id="welcomeUser" class="font-medium text-slate-600"></span>
+            <button onclick="logout()" class="bg-red-50 text-red-600 px-4 py-2 rounded-lg hover:bg-red-100 font-semibold">Logout</button>
         </div>
-        
-        <div id="pollsContainer" class="grid gap-6">
-            <!-- Rendered via JS -->
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-10">
+        <div id="loader" class="text-center py-20">
+            <p class="text-slate-400 animate-pulse">Fetching active polls...</p>
         </div>
-    </div>
+
+        <div id="pollsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-8 hidden">
+            <!-- Polls injected here -->
+        </div>
+    </main>
 
     <script>
-        // Fetch polls using MongoDB Data API directly (Read-only)
-        async function loadPolls() {
-            const res = await fetch(`${MONGO_DATA_URL}/find`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'api-key': MONGO_DATA_KEY },
-                body: JSON.stringify({ dataSource: CLUSTER_NAME, database: "voting_db", collection: "Polls" })
-            });
-            const { documents } = await res.json();
-            
-            const container = document.getElementById('pollsContainer');
-            container.innerHTML = documents.map(poll => `
-                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-                    <h3 class="text-xl font-bold mb-4">${poll.question}</h3>
-                    <div class="space-y-2 mb-4">
-                        ${poll.options.map((opt, i) => `
-                            <button onclick="castVote('${poll._id}', ${i})" class="w-full text-left p-3 border rounded hover:bg-blue-50 dark:hover:bg-gray-700">
-                                ${opt}
-                            </button>
-                        `).join('')}
+        if (!localStorage.getItem('token')) window.location.href = 'index.html';
+        document.getElementById('welcomeUser').innerText = "Hello, " + localStorage.getItem('username');
+
+        let charts = {};
+
+        async function initDashboard() {
+            try {
+                const polls = await fetchPollResults();
+                document.getElementById('loader').classList.add('hidden');
+                const grid = document.getElementById('pollsGrid');
+                grid.classList.remove('hidden');
+
+                grid.innerHTML = polls.map(poll => `
+                    <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 class="text-xl font-bold mb-6">${poll.question}</h3>
+                        <div class="space-y-3 mb-8">
+                            ${poll.options.map((opt, i) => `
+                                <button onclick="vote('${poll.id}', ${i})" class="w-full text-left p-4 rounded-xl border border-slate-100 bg-slate-50 hover:bg-blue-600 hover:text-white transition-all font-medium">
+                                    ${opt}
+                                </button>
+                            `).join('')}
+                        </div>
+                        <div class="pt-6 border-t">
+                            <canvas id="chart-${poll.id}"></canvas>
+                        </div>
                     </div>
-                    <canvas id="chart-${poll._id}" height="100"></canvas>
-                </div>
-            `).join('');
-            
-            loadCharts(documents); // function to load chart.js instances
+                `).join('');
+
+                polls.forEach(renderChart);
+            } catch (e) { console.error(e); }
         }
 
-        async function castVote(pollId, optionIndex) {
-            alert("Voting... Please wait.");
+        function renderChart(poll) {
+            const ctx = document.getElementById(`chart-${poll.id}`);
+            charts[poll.id] = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: poll.options,
+                    datasets: [{
+                        data: poll.results,
+                        backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
+                    }]
+                },
+                options: { plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+
+        async function vote(pollId, optionIndex) {
+            if (!confirm("Confirm your vote? This cannot be undone.")) return;
             try {
+                alert("Submitting to GitHub Actions... this takes about 20 seconds.");
                 await dispatchAction('vote', { 
                     token: localStorage.getItem('token'), 
                     pollId, 
                     optionIndex 
                 });
-                alert("Vote recorded!");
-                loadPolls(); // Reload results
-            } catch (e) {
-                alert(`Error: ${e}`);
-            }
+                location.reload();
+            } catch (e) { alert("Error: " + e); }
         }
+
+        function logout() { localStorage.clear(); window.location.href = 'index.html'; }
         
-        // Auto-refresh simulation
-        setInterval(loadPolls, 10000); 
-        loadPolls();
+        initDashboard();
+        setInterval(initDashboard, 15000); // Auto-refresh every 15s
     </script>
 </body>
 </html>
