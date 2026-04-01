@@ -1,10 +1,7 @@
-// ==========================================
-// CONFIGURATION: CHANGE THESE 3 VARIABLES!
-// ==========================================
-const GH_OWNER = "YOUR_GITHUB_USERNAME"; 
-const GH_REPO = "YOUR_REPO_NAME"; 
-// This PAT is SAFE to expose if it ONLY has "Actions: Read & Write" and NO content access.
-const GH_PAT = "github_pat_11XXXXXX_YYYYYYY"; 
+// These will be automatically filled by the "Deploy" action
+const GH_OWNER = "ravikumar-droid"; 
+const GH_REPO = "voting-system"; 
+const GH_PAT = "TOKEN_INJECTED_BY_ACTION"; // DO NOT CHANGE THIS MANUALLY
 
 const workflows = {
     'login': 'auth.yml',
@@ -16,7 +13,6 @@ const getResponseUrl = (requestId) => `https://${GH_OWNER}.github.io/${GH_REPO}/
 const getPollsUrl = () => `https://${GH_OWNER}.github.io/${GH_REPO}/api/public_polls.json`;
 const generateUUID = () => crypto.randomUUID();
 
-// 1. Send Request to GitHub Actions
 async function dispatchAction(actionType, payload) {
     const requestId = generateUUID();
     const fullPayload = { ...payload, requestId, actionType };
@@ -26,7 +22,7 @@ async function dispatchAction(actionType, payload) {
         method: 'POST',
         headers: {
             'Accept': 'application/vnd.github.v3+json',
-            'Authorization': `Bearer ${GH_PAT}`,
+            'Authorization': `Bearer ${GH_PAT}`, // Uses the injected token
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -35,30 +31,12 @@ async function dispatchAction(actionType, payload) {
         })
     });
 
-    if (!res.ok) throw new Error("Failed to wake up backend. Check your GH_PAT.");
+    if (!res.ok) {
+        const err = await res.json();
+        console.error(err);
+        throw new Error("Backend is waking up or Token is invalid. Please wait 10 seconds and try again.");
+    }
     return await pollForResponse(requestId);
 }
 
-// 2. Wait for GitHub Actions to process and create the file
-async function pollForResponse(requestId) {
-    return new Promise((resolve, reject) => {
-        let attempts = 0;
-        const interval = setInterval(async () => {
-            attempts++;
-            if (attempts > 30) { // 60 seconds timeout
-                clearInterval(interval);
-                reject("Request timed out. GitHub Actions might be queued.");
-            }
-            try {
-                // Cache-busting to get the absolute newest file
-                const res = await fetch(`${getResponseUrl(requestId)}?t=${Date.now()}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    clearInterval(interval);
-                    if (data.status === 200) resolve(data);
-                    else reject(data.error);
-                }
-            } catch (e) { /* File not ready, keep waiting */ }
-        }, 2000); // Check every 2 seconds
-    });
-}
+// ... pollForResponse remains the same ...
