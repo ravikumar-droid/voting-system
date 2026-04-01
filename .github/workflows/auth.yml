@@ -1,95 +1,55 @@
-name: Admin Backend (Gist DB)
-on:
-  workflow_dispatch:
-    inputs:
-      payload:
-        required: true
-
-permissions:
-  contents: write
-
-jobs:
-  admin-logic:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with: { node-version: 18 }
-
-      - name: Process Admin Action
+- name: Process Authentication
         env:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
           GIST_ID: ${{ secrets.GIST_ID }}
           PAYLOAD: ${{ github.event.inputs.payload }}
         run: |
-          cat << 'EOF' > admin.js
+          node -e "
           const fs = require('fs');
+          const crypto = require('crypto');
+          const hash = (p) => crypto.createHash('sha256').update(p).digest('hex');
 
           async function run() {
             const payload = JSON.parse(process.env.PAYLOAD);
-            const gistUrl = `https://api.github.com/gists/${process.env.GIST_ID}`;
-            const headers = { 'Authorization': `token ${process.env.GIST_TOKEN}`, 'Accept': 'application/vnd.github.v3+json' };
+            const gistUrl = 'https://api.github.com/gists/' + process.env.GIST_ID;
+            const headers = { 'Authorization': 'token ' + process.env.GIST_TOKEN, 'Accept': 'application/vnd.github.v3+json' };
+            
+            const gistReq = await fetch(gistUrl, { headers });
+            const gistData = await gistReq.json();
+            let users = JSON.parse(gistData.files['users.json'].content);
             let responseData = {};
 
             try {
-              const gistReq = await fetch(gistUrl, { headers });
-              const gistData = await gistReq.json();
-              
-              let users = JSON.parse(gistData.files['users.json']?.content || '[]');
-              let polls = JSON.parse(gistData.files['polls.json']?.content || '[]');
+                if (payload.actionType === 'register') {
+                    users.push({ id: crypto.randomUUID(), username: payload.username, password: hash(payload.password), status: 'approved', token: null });
+                    responseData = { status: 200, message: 'Success!' };
+                } else {
+                    const user = users.find(u => u.username === payload.username && u.password === hash(payload.password));
+                    if (!user) throw new Error('Invalid');
+                    const token = crypto.randomUUID();
+                    user.token = token;
+                    responseData = { status: 200, token, username: user.username };
+                }
 
-              // 1. SECURITY: Verify the requester is actually an admin
-              const adminUser = users.find(u => u.token === payload.token && u.role === 'admin');
-              if (!adminUser) throw new Error("Unauthorized: Admin access required");
-
-              if (payload.actionType === 'admin_create_poll') {
-                polls.push({
-                  id: 'poll_' + Date.now(),
-                  question: payload.question,
-                  options: payload.options,
-                  createdAt: new Date().toISOString()
+                // SAVE BOTH USERS AND THE SPECIFIC RESPONSE TO THE GIST
+                await fetch(gistUrl, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({
+                        files: {
+                            'users.json': { content: JSON.stringify(users, null, 2) },
+                            ['res-' + payload.requestId + '.json']: { content: JSON.stringify(responseData) }
+                        }
+                    })
                 });
-                responseData = { status: 200, message: "Poll created successfully!" };
-              }
-
-              else if (payload.actionType === 'admin_approve_user') {
-                const targetIdx = users.findIndex(u => u.id === payload.targetUserId);
-                if (targetIdx === -1) throw new Error("User not found");
-                users[targetIdx].status = 'approved';
-                responseData = { status: 200, message: "User approved!" };
-              }
-
-              // 2. Save Secret Gist
-              await fetch(gistUrl, {
-                method: 'PATCH',
-                headers,
-                body: JSON.stringify({
-                  files: {
-                    'users.json': { content: JSON.stringify(users, null, 2) },
-                    'polls.json': { content: JSON.stringify(polls, null, 2) }
-                  }
-                })
-              });
-              
-              // 3. Update public user list (Names only, no passwords/tokens) for Admin UI
-              const publicUsers = users.map(u => ({ id: u.id, username: u.username, status: u.status }));
-              fs.mkdirSync('./api', { recursive: true });
-              fs.writeFileSync('./api/admin_user_list.json', JSON.stringify(publicUsers));
-
-            } catch (error) { responseData = { status: 400, error: error.message }; }
-
-            fs.mkdirSync('./api/responses', { recursive: true });
-            fs.writeFileSync(`./api/responses/${payload.requestId}.json`, JSON.stringify(responseData));
+            } catch (e) {
+                // If error, still write the error response to Gist
+                await fetch(gistUrl, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({ files: { ['res-' + payload.requestId + '.json']: { content: JSON.stringify({ status: 400, error: e.message }) } } })
+                });
+            }
           }
           run();
-          EOF
-          node admin.js
-
-      - name: Commit Changes
-        run: |
-          git config --global user.name "Admin-Bot"
-          git config --global user.email "bot@voting"
-          git add api/
-          git commit -m "Admin Action: User update / Poll creation" || echo "No changes"
-          git pull --rebase origin main
-          git push origin main
+          "
