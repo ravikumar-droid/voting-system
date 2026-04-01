@@ -9,7 +9,7 @@ const workflows = {
     'vote': 'vote.yml',
     'admin_create_poll': 'admin.yml',
     'admin_approve_user': 'admin.yml'
-};
+}; 
 
 const getResponseUrl = (requestId) => `https://${GH_OWNER}.github.io/${GH_REPO}/api/responses/${requestId}.json`;
 const getPollsUrl = () => `https://${GH_OWNER}.github.io/${GH_REPO}/api/public_polls.json`;
