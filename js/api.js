@@ -2,10 +2,16 @@
 console.log("✅ api.js has loaded successfully!");
 
 // 1. CONFIGURATION
+// js/api.js
+
 const GH_OWNER = "ravikumar-droid"; 
 const GH_REPO = "voting-system"; 
 const GH_PAT = "PLACEHOLDER_TOKEN"; 
-const GIST_ID = "PASTE_YOUR_GIST_ID_HERE"; // <--- PUT YOUR GIST ID HERE
+
+// 🚨 REPLACE THE LINE BELOW WITH YOUR ACTUAL GIST ID 🚨
+const GIST_ID = "c5a19b5d804791fe34ce171d15b6f1f0"; 
+
+// ... (keep the rest of the code the same)
 
 const workflows = {
     'login': 'auth.yml',
