@@ -2,70 +2,56 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecureVote | Login</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="js/api.js"></script>
+    
+    <!-- 1. Check this path matches exactly! -->
+    <script src="js/api.js" onerror="alert('CRITICAL ERROR: Could not load js/api.js. Check your folder structure!')"></script>
 </head>
-<body class="bg-slate-900 text-white flex items-center justify-center min-h-screen font-sans">
-    <div class="bg-slate-800 p-10 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700">
-        <div class="text-center mb-10">
-            <h1 class="text-4xl font-extrabold tracking-tight text-blue-500">SecureVote</h1>
-            <p class="text-slate-400 mt-2">Decentralized Voting System</p>
+<body class="bg-slate-900 text-white flex items-center justify-center min-h-screen">
+    <div class="bg-slate-800 p-10 rounded-2xl shadow-2xl w-full max-w-md">
+        <h1 class="text-4xl font-bold text-blue-500 text-center mb-10">SecureVote</h1>
+
+        <div class="space-y-6">
+            <input type="text" id="username" class="w-full bg-slate-700 p-3 rounded" placeholder="Username">
+            <input type="password" id="password" class="w-full bg-slate-700 p-3 rounded" placeholder="Password">
+            
+            <button onclick="handleAuth('login')" class="w-full bg-blue-600 p-3 rounded font-bold">Login</button>
+            <button onclick="handleAuth('register')" class="w-full border border-slate-600 p-3 rounded font-bold">Register</button>
         </div>
 
-        <div id="authContainer" class="space-y-6">
-            <div>
-                <label class="block text-sm font-medium mb-2">Username</label>
-                <input type="text" id="username" class="w-full bg-slate-700 border border-slate-600 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Enter username">
-            </div>
-            <div>
-                <label class="block text-sm font-medium mb-2">Password</label>
-                <input type="password" id="password" class="w-full bg-slate-700 border border-slate-600 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="••••••••">
-            </div>
-
-            <div class="pt-4 flex flex-col gap-3">
-                <button onclick="handleAuth('login')" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-all transform hover:scale-[1.02]">
-                    Login
-                </button>
-                <button onclick="handleAuth('register')" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-lg transition-all border border-slate-600">
-                    Register New Account
-                </button>
-            </div>
-        </div>
-
-        <div id="statusBox" class="mt-8 hidden p-4 rounded-lg bg-slate-700/50 border border-blue-500/30">
-            <p id="statusMsg" class="text-sm text-center text-blue-400 font-medium"></p>
+        <div id="statusBox" class="mt-8 hidden p-4 rounded bg-slate-700">
+            <p id="statusMsg" class="text-sm text-center font-bold text-blue-400"></p>
         </div>
     </div>
 
     <script>
         async function handleAuth(type) {
+            // 2. Check if the function exists before calling it
+            if (typeof dispatchAction === "undefined") {
+                const msg = "Error: The API is not loaded. Check your browser console (F12) for 404 errors.";
+                document.getElementById('statusBox').classList.remove('hidden');
+                document.getElementById('statusMsg').innerText = msg;
+                console.error(msg);
+                return;
+            }
+
             const u = document.getElementById('username').value;
             const p = document.getElementById('password').value;
-            const statusBox = document.getElementById('statusBox');
             const statusMsg = document.getElementById('statusMsg');
-
-            if (!u || !p) return alert("Please fill in all fields.");
-
-            statusBox.classList.remove('hidden');
-            statusMsg.innerText = type === 'login' ? "Authenticating..." : "Creating account...";
+            document.getElementById('statusBox').classList.remove('hidden');
 
             try {
                 const res = await dispatchAction(type, { username: u, password: p });
-                
                 if (type === 'login') {
                     localStorage.setItem('token', res.token);
                     localStorage.setItem('username', res.username);
-                    localStorage.setItem('role', res.role || 'user');
-                    statusMsg.innerText = "Success! Redirecting...";
-                    window.location.href = res.role === 'admin' ? 'admin.html' : 'dashboard.html';
+                    window.location.href = 'dashboard.html';
                 } else {
-                    statusMsg.innerText = res.message + " You can now log in.";
+                    statusMsg.innerText = res.message;
                 }
             } catch (e) {
                 statusMsg.innerText = "Error: " + e;
-                statusMsg.classList.add('text-red-400');
             }
         }
     </script>
