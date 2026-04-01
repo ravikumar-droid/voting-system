@@ -3,17 +3,10 @@ on:
   push:
     branches: [ main ]
 
-# Grant the necessary permissions for GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
-
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
@@ -24,8 +17,8 @@ jobs:
 
       - name: Inject Secret
         run: |
-          # Ensure this matches the placeholder in your js/api.js exactly
-          sed -i "s/TOKEN_PLACEHOLDER/${{ secrets.GH_PAT }}/g" js/api.js
+          # We are searching for "TOKEN_PLACEHOLDER" and replacing it with your Secret GH_PAT
+          sed -i 's/TOKEN_PLACEHOLDER/${{ secrets.GH_PAT }}/g' js/api.js
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -33,7 +26,7 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.' # Upload the root directory
+          path: '.' 
 
       - name: Deploy to GitHub Pages
         id: deployment
