@@ -1,0 +1,51 @@
+name: Register User Backend
+on:
+  repository_dispatch:
+    types: [register]
+
+jobs:
+  process-registration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with: { node-version: 18 }
+      - name: Install Dependencies
+        run: npm install mongodb bcryptjs
+      - name: Execute Logic
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+        run: |
+          cat << 'EOF' > index.js
+          const { MongoClient } = require('mongodb');
+          const bcrypt = require('bcryptjs');
+          async function run() {
+            const payload = JSON.parse(process.env.PAYLOAD);
+            const client = new MongoClient(process.env.MONGO_URI);
+            await client.connect();
+            const db = client.db('voting_db');
+            
+            try {
+              const existing = await db.collection('Users').findOne({ username: payload.username });
+              if (existing) throw new Error("Username taken");
+              
+              const hashedPassword = await bcrypt.hash(payload.password, 10);
+              const user = { 
+                username: payload.username, 
+                password: hashedPassword, 
+                role: 'user', 
+                status: 'pending', // Requires admin approval
+                token: null 
+              };
+              await db.collection('Users').insertOne(user);
+              await db.collection('Responses').insertOne({ requestId: payload.requestId, status: 200, data: { message: "Registered. Pending admin approval." }});
+            } catch (error) {
+              await db.collection('Responses').insertOne({ requestId: payload.requestId, status: 400, data: { error: error.message }});
+            } finally {
+              await client.close();
+            }
+          }
+          run();
+          EOF
+          node index.js
