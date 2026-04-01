@@ -19,6 +19,7 @@ const workflows = {
     'admin_create_poll': 'admin.yml',
     'admin_approve_user': 'admin.yml',
     'admin_toggle_poll': 'admin.yml' // New: Feature to STOP/START elections
+    'admin_toggle_results': 'admin.yml' // Add this mapping
 };
 
 /**
