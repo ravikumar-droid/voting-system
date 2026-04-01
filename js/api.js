@@ -1,52 +1,64 @@
-// --- CONFIGURATION ---
-const GH_OWNER = "YOUR_GITHUB_USERNAME";
-const GH_REPO = "YOUR_REPO_NAME";
-const GH_PAT = "YOUR_SCOPED_GITHUB_PAT"; // Must only have action dispatch permissions
+// ==========================================
+// CONFIGURATION: CHANGE THESE 3 VARIABLES!
+// ==========================================
+const GH_OWNER = "YOUR_GITHUB_USERNAME"; 
+const GH_REPO = "YOUR_REPO_NAME"; 
+// This PAT is SAFE to expose if it ONLY has "Actions: Read & Write" and NO content access.
+const GH_PAT = "github_pat_11XXXXXX_YYYYYYY"; 
 
-const MONGO_DATA_URL = "YOUR_MONGO_DATA_API_ENDPOINT/action";
-const MONGO_DATA_KEY = "YOUR_MONGO_READ_ONLY_API_KEY";
-const CLUSTER_NAME = "Cluster0";
+const workflows = {
+    'login': 'auth.yml',
+    'register': 'auth.yml',
+    'vote': 'vote.yml'
+};
 
-// Generates unique request ID
+const getResponseUrl = (requestId) => `https://${GH_OWNER}.github.io/${GH_REPO}/api/responses/${requestId}.json`;
+const getPollsUrl = () => `https://${GH_OWNER}.github.io/${GH_REPO}/api/public_polls.json`;
 const generateUUID = () => crypto.randomUUID();
 
-// Sends request to GitHub Actions
-async function dispatchAction(eventType, payload) {
+// 1. Send Request to GitHub Actions
+async function dispatchAction(actionType, payload) {
     const requestId = generateUUID();
-    const fullPayload = { ...payload, requestId };
+    const fullPayload = { ...payload, requestId, actionType };
+    const workflowFile = workflows[actionType];
 
-    await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/dispatches`, {
+    const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${workflowFile}/dispatches`, {
         method: 'POST',
         headers: {
             'Accept': 'application/vnd.github.v3+json',
             'Authorization': `Bearer ${GH_PAT}`,
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ event_type: eventType, client_payload: fullPayload })
+        body: JSON.stringify({
+            ref: "main",
+            inputs: { payload: JSON.stringify(fullPayload) }
+        })
     });
 
+    if (!res.ok) throw new Error("Failed to wake up backend. Check your GH_PAT.");
     return await pollForResponse(requestId);
 }
 
-// Polls MongoDB Data API for the response
+// 2. Wait for GitHub Actions to process and create the file
 async function pollForResponse(requestId) {
     return new Promise((resolve, reject) => {
+        let attempts = 0;
         const interval = setInterval(async () => {
-            const res = await fetch(`${MONGO_DATA_URL}/findOne`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'api-key': MONGO_DATA_KEY },
-                body: JSON.stringify({
-                    dataSource: CLUSTER_NAME, database: "voting_db", collection: "Responses",
-                    filter: { requestId: requestId }
-                })
-            });
-            const { document } = await res.json();
-            
-            if (document) {
+            attempts++;
+            if (attempts > 30) { // 60 seconds timeout
                 clearInterval(interval);
-                if (document.status === 200) resolve(document.data);
-                else reject(document.data.error);
+                reject("Request timed out. GitHub Actions might be queued.");
             }
+            try {
+                // Cache-busting to get the absolute newest file
+                const res = await fetch(`${getResponseUrl(requestId)}?t=${Date.now()}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    clearInterval(interval);
+                    if (data.status === 200) resolve(data);
+                    else reject(data.error);
+                }
+            } catch (e) { /* File not ready, keep waiting */ }
         }, 2000); // Check every 2 seconds
     });
 }
