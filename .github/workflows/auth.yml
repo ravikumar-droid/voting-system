@@ -1,0 +1,93 @@
+name: Auth Backend (Gist DB)
+on:
+  workflow_dispatch:
+    inputs:
+      payload:
+        required: true
+
+permissions:
+  contents: write 
+
+jobs:
+  auth-logic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with: { node-version: 18 }
+
+      - name: Process Authentication
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          PAYLOAD: ${{ github.event.inputs.payload }}
+        run: |
+          cat << 'EOF' > auth.js
+          const fs = require('fs');
+          const crypto = require('crypto');
+
+          // Built-in SHA256 hashing so we don't need npm install!
+          const hashPassword = (pwd) => crypto.createHash('sha256').update(pwd).digest('hex');
+
+          async function run() {
+            const payload = JSON.parse(process.env.PAYLOAD);
+            const gistUrl = `https://api.github.com/gists/${process.env.GIST_ID}`;
+            const headers = { 'Authorization': `token ${process.env.GIST_TOKEN}`, 'Accept': 'application/vnd.github.v3+json' };
+            let responseData = {};
+
+            try {
+              // 1. Fetch Secret Gist
+              const gistReq = await fetch(gistUrl, { headers });
+              const gistData = await gistReq.json();
+              let users = JSON.parse(gistData.files['users.json']?.content || '[]');
+
+              if (payload.actionType === 'register') {
+                if (users.find(u => u.username === payload.username)) throw new Error("Username taken");
+                
+                users.push({
+                  id: crypto.randomUUID(),
+                  username: payload.username,
+                  password: hashPassword(payload.password),
+                  status: 'approved', // Auto-approve for now
+                  token: null
+                });
+                responseData = { status: 200, message: "Registered successfully! You can now log in." };
+              } 
+              
+              else if (payload.actionType === 'login') {
+                const userIndex = users.findIndex(u => u.username === payload.username);
+                if (userIndex === -1 || users[userIndex].password !== hashPassword(payload.password)) {
+                  throw new Error("Invalid credentials");
+                }
+                if (users[userIndex].status !== 'approved') throw new Error("Account pending approval");
+
+                const newToken = crypto.randomUUID();
+                users[userIndex].token = newToken; // Update session token
+                responseData = { status: 200, token: newToken, userId: users[userIndex].id };
+              }
+
+              // 2. Save Secret Gist
+              await fetch(gistUrl, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({ files: { 'users.json': { content: JSON.stringify(users, null, 2) } } })
+              });
+
+            } catch (error) { responseData = { status: 400, error: error.message }; }
+
+            // 3. Save temporary public response for frontend
+            fs.mkdirSync('./api/responses', { recursive: true });
+            fs.writeFileSync(`./api/responses/${payload.requestId}.json`, JSON.stringify(responseData));
+          }
+          run();
+          EOF
+          node auth.js
+
+      - name: Commit Response to Public Repo
+        run: |
+          git config --global user.name "Auth-Bot"
+          git config --global user.email "bot@voting"
+          git add api/responses/
+          git commit -m "Login/Register Response" || echo "No changes"
+          git pull --rebase origin main
+          git push origin main
