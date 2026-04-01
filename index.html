@@ -29,40 +29,32 @@
     </div>
 
     <script>
-        async function handleAuth(type) {
-            const statusBox = document.getElementById('statusBox');
-            const statusMsg = document.getElementById('statusMsg');
-            statusBox.classList.remove('hidden');
+        // Inside index.html script
+async function handleAuth(type) {
+    const statusMsg = document.getElementById('statusMsg');
+    try {
+        const res = await dispatchAction(type, { username: u, password: p });
+        
+        if (type === 'login') {
+            localStorage.setItem('token', res.token);
+            localStorage.setItem('username', res.username);
+            localStorage.setItem('role', res.role || 'user'); // Save the role!
 
-            // 🔍 DIAGNOSTIC CHECK
-            if (typeof dispatchAction === "undefined") {
-                statusMsg.innerText = "❌ API Error: 'api.js' file not found. Check your GitHub folders!";
-                statusMsg.classList.replace('text-blue-400', 'text-red-400');
-                console.error("The browser could not find api.js in /js/api.js or /api.js");
-                return;
+            statusMsg.innerText = "Login Success! Redirecting...";
+            
+            // RELIABLE REDIRECT
+            if (res.role === 'admin') {
+                window.location.replace('admin.html');
+            } else {
+                window.location.replace('dashboard.html');
             }
-
-            const u = document.getElementById('username').value;
-            const p = document.getElementById('password').value;
-            if(!u || !p) return alert("Fill in fields");
-
-            statusMsg.innerText = "Connecting to Secure Backend...";
-            statusMsg.classList.replace('text-red-400', 'text-blue-400');
-
-            try {
-                const res = await dispatchAction(type, { username: u, password: p });
-                if (type === 'login') {
-                    localStorage.setItem('token', res.token);
-                    localStorage.setItem('username', res.username);
-                    window.location.href = (res.role === 'admin') ? 'admin.html' : 'dashboard.html';
-                } else {
-                    statusMsg.innerText = res.message;
-                }
-            } catch (e) {
-                statusMsg.innerText = "Error: " + e;
-                statusMsg.classList.replace('text-blue-400', 'text-red-400');
-            }
+        } else {
+            statusMsg.innerText = res.message;
         }
+    } catch (e) {
+        statusMsg.innerText = "Error: " + e;
+    }
+}
     </script>
 </body>
 </html>
