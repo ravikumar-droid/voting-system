@@ -5,9 +5,12 @@
  * will be automatically replaced by the 'deploy.yml' GitHub Action 
  * using your repository secrets. Do not change them manually here.
  */
+// REPLACE THESE MANUALLY FOR NOW
 const GH_OWNER = "ravikumar-droid"; 
 const GH_REPO = "voting-system"; 
 const GH_PAT = "TOKEN_INJECTED_BY_ACTION"; 
+
+// ... (rest of your api.js code)
 
 // Maps frontend actions to their specific .yml backend files
 const workflows = {
