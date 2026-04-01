@@ -1,26 +1,21 @@
-/**
- * SECURE VOTING SYSTEM - CORE API
- * Repository: ravikumar-droid/voting-system
- */
 
-// 1. CONFIGURATION (Injected by deploy.yml)
-const GH_OWNER = "ravikumar-droid"; 
-const GH_REPO = "voting-system"; 
-const GH_PAT = "PLACEHOLDER_TOKEN"; 
+const GH_OWNER = "ravikumar-droid";
+const GH_REPO = "voting-system";
+const GH_PAT = "PLACEHOLDER_TOKEN";
 
 // 2. DATABASE CONFIGURATION
-const GIST_ID = "c5a19b5d804791fe34ce171d15b6f1f0"; 
+const GIST_ID = "c5a19b5d804791fe34ce171d15b6f1f0";
 
 // 3. BACKEND WORKFLOW MAPPING
 const workflows = {
-    'login': 'auth.yml',
-    'register': 'auth.yml',
-    'vote': 'vote.yml',
-    'admin_create_poll': 'admin.yml',
-    'admin_approve_user': 'admin.yml',
-    'admin_toggle_poll': 'admin.yml',
-    'admin_toggle_results': 'admin.yml',
-    'admin_delete_poll': 'admin.yml'
+    "login": "auth.yml",
+    "register": "auth.yml",
+    "vote": "vote.yml",
+    "admin_create_poll": "admin.yml",
+    "admin_approve_user": "admin.yml",
+    "admin_toggle_poll": "admin.yml",
+    "admin_toggle_results": "admin.yml",
+    "admin_delete_poll": "admin.yml"
 };
 
 /**
@@ -28,19 +23,26 @@ const workflows = {
  */
 async function dispatchAction(actionType, payload) {
     const requestId = crypto.randomUUID();
-    const fullPayload = { ...payload, requestId, actionType };
     const workflowFile = workflows[actionType];
+    
+    if (!workflowFile) {
+        throw new Error("Action not found in workflow map.");
+    }
 
-    if (!workflowFile) throw new Error("Unknown action type: " + actionType);
+    const fullPayload = { 
+        ...payload, 
+        requestId: requestId, 
+        actionType: actionType 
+    };
 
-    console.log(`🚀 Dispatching ${actionType} (ID: ${requestId})...`);
+    console.log("🚀 Dispatching:", actionType);
 
     const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${workflowFile}/dispatches`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-            'Accept': 'application/vnd.github.v3+json',
-            'Authorization': `Bearer ${GH_PAT}`, 
-            'Content-Type': 'application/json'
+            "Accept": "application/vnd.github.v3+json",
+            "Authorization": `Bearer ${GH_PAT}`,
+            "Content-Type": "application/json"
         },
         body: JSON.stringify({
             ref: "main",
@@ -48,7 +50,9 @@ async function dispatchAction(actionType, payload) {
         })
     });
 
-    if (!res.ok) throw new Error("Backend connection failed. Status: " + res.status);
+    if (!res.ok) {
+        throw new Error("Backend connection failed. Status: " + res.status);
+    }
     
     return await pollForResponse(requestId);
 }
@@ -63,7 +67,7 @@ async function pollForResponse(requestId) {
         let attempts = 0;
         const interval = setInterval(async () => {
             attempts++;
-            console.log(`⏳ Checking Gist for response... Attempt ${attempts}/30`);
+            console.log(`⏳ Waiting for response... ${attempts}/30`);
 
             if (attempts > 30) { 
                 clearInterval(interval); 
@@ -72,7 +76,7 @@ async function pollForResponse(requestId) {
             
             try {
                 const res = await fetch(responseUrl, {
-                    headers: { 'Authorization': `token ${GH_PAT}` }
+                    headers: { "Authorization": `token ${GH_PAT}` }
                 });
                 const gistData = await res.json();
                 const fileName = `res-${requestId}.json`;
@@ -88,7 +92,7 @@ async function pollForResponse(requestId) {
                     }
                 }
             } catch (e) { 
-                console.warn("Polling..."); 
+                // Ignore errors during polling
             }
         }, 3000);
     });
@@ -101,16 +105,16 @@ async function fetchPollResults() {
     const url = `https://api.github.com/gists/${GIST_ID}?t=${Date.now()}`;
     try {
         const res = await fetch(url, { 
-            headers: { 'Authorization': `token ${GH_PAT}` } 
+            headers: { "Authorization": `token ${GH_PAT}` } 
         });
         const gistData = await res.json();
         
-        if (gistData.files['public_polls.json']) {
-            return JSON.parse(gistData.files['public_polls.json'].content);
+        if (gistData.files["public_polls.json"]) {
+            return JSON.parse(gistData.files["public_polls.json"].content);
         }
         return [];
     } catch (e) {
-        console.error("Failed to fetch polls.", e);
+        console.error("Poll fetch error:", e);
         return [];
     }
 }
