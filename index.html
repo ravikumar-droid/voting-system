@@ -2,54 +2,70 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Secure Voting - Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureVote | Login</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="js/api.js" defer></script>
+    <script src="js/api.js"></script>
 </head>
-<body class="bg-gray-100 flex items-center justify-center h-screen">
-    <div class="bg-white p-8 rounded-lg shadow-xl w-96">
-        <h2 class="text-2xl font-bold mb-6 text-center">Voting Portal</h2>
-        
-        <form class="space-y-4">
-            <input type="text" id="username" placeholder="Username" class="w-full p-3 border rounded" required>
-            <input type="password" id="password" placeholder="Password" class="w-full p-3 border rounded" required>
-            
-            <button type="button" onclick="handleLogin()" class="w-full bg-blue-600 text-white p-3 rounded hover:bg-blue-700 font-bold">Login</button>
-            <button type="button" onclick="handleRegister()" class="w-full bg-green-600 text-white p-3 rounded hover:bg-green-700 font-bold">Register</button>
-        </form>
-        <p id="statusMsg" class="mt-4 text-sm text-center font-bold text-blue-500"></p>
+<body class="bg-slate-900 text-white flex items-center justify-center min-h-screen font-sans">
+    <div class="bg-slate-800 p-10 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700">
+        <div class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold tracking-tight text-blue-500">SecureVote</h1>
+            <p class="text-slate-400 mt-2">Decentralized Voting System</p>
+        </div>
+
+        <div id="authContainer" class="space-y-6">
+            <div>
+                <label class="block text-sm font-medium mb-2">Username</label>
+                <input type="text" id="username" class="w-full bg-slate-700 border border-slate-600 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Enter username">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2">Password</label>
+                <input type="password" id="password" class="w-full bg-slate-700 border border-slate-600 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="••••••••">
+            </div>
+
+            <div class="pt-4 flex flex-col gap-3">
+                <button onclick="handleAuth('login')" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-all transform hover:scale-[1.02]">
+                    Login
+                </button>
+                <button onclick="handleAuth('register')" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-lg transition-all border border-slate-600">
+                    Register New Account
+                </button>
+            </div>
+        </div>
+
+        <div id="statusBox" class="mt-8 hidden p-4 rounded-lg bg-slate-700/50 border border-blue-500/30">
+            <p id="statusMsg" class="text-sm text-center text-blue-400 font-medium"></p>
+        </div>
     </div>
 
     <script>
-        async function handleLogin() {
+        async function handleAuth(type) {
             const u = document.getElementById('username').value;
             const p = document.getElementById('password').value;
-            const status = document.getElementById('statusMsg');
-            
-            status.innerText = "Logging in... (Connecting to secure vault)";
-            status.className = "mt-4 text-sm text-center font-bold text-blue-500";
-            
-            try {
-                const res = await dispatchAction('login', { username: u, password: p });
-                localStorage.setItem('token', res.token);
-                localStorage.setItem('userId', res.userId);
-                window.location.href = 'dashboard.html';
-            } catch (e) {
-                status.innerText = `Error: ${e}`;
-                status.className = "mt-4 text-sm text-center font-bold text-red-500";
-            }
-        }
+            const statusBox = document.getElementById('statusBox');
+            const statusMsg = document.getElementById('statusMsg');
 
-        async function handleRegister() {
-            const u = document.getElementById('username').value;
-            const p = document.getElementById('password').value;
-            document.getElementById('statusMsg').innerText = "Registering... Waking up backend.";
-            
+            if (!u || !p) return alert("Please fill in all fields.");
+
+            statusBox.classList.remove('hidden');
+            statusMsg.innerText = type === 'login' ? "Authenticating..." : "Creating account...";
+
             try {
-                const res = await dispatchAction('register', { username: u, password: p });
-                document.getElementById('statusMsg').innerText = res.message;
+                const res = await dispatchAction(type, { username: u, password: p });
+                
+                if (type === 'login') {
+                    localStorage.setItem('token', res.token);
+                    localStorage.setItem('username', res.username);
+                    localStorage.setItem('role', res.role || 'user');
+                    statusMsg.innerText = "Success! Redirecting...";
+                    window.location.href = res.role === 'admin' ? 'admin.html' : 'dashboard.html';
+                } else {
+                    statusMsg.innerText = res.message + " You can now log in.";
+                }
             } catch (e) {
-                document.getElementById('statusMsg').innerText = `Error: ${e}`;
+                statusMsg.innerText = "Error: " + e;
+                statusMsg.classList.add('text-red-400');
             }
         }
     </script>
