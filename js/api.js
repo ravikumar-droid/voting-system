@@ -6,7 +6,9 @@ const GH_PAT = "TOKEN_INJECTED_BY_ACTION"; // DO NOT CHANGE THIS MANUALLY
 const workflows = {
     'login': 'auth.yml',
     'register': 'auth.yml',
-    'vote': 'vote.yml'
+    'vote': 'vote.yml',
+    'admin_create_poll': 'admin.yml',
+    'admin_approve_user': 'admin.yml'
 };
 
 const getResponseUrl = (requestId) => `https://${GH_OWNER}.github.io/${GH_REPO}/api/responses/${requestId}.json`;
