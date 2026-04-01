@@ -1,39 +1,55 @@
-name: Secure Deploy
-on:
-  push:
-    branches: [ main ]
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Inject Secrets
+- name: Process Authentication
         env:
-          MY_TOKEN: ${{ secrets.GH_PAT }}
-          MY_USER: ${{ github.repository_owner }}
-          MY_REPO: ${{ github.event.repository.name }}
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          PAYLOAD: ${{ github.event.inputs.payload }}
         run: |
-          # We use '|' as a delimiter to avoid issues with special characters in tokens
-          sed -i "s|PLACEHOLDER_TOKEN|$MY_TOKEN|g" js/api.js
-          sed -i "s|PLACEHOLDER_USER|$MY_USER|g" js/api.js
-          sed -i "s|PLACEHOLDER_REPO|$MY_REPO|g" js/api.js
+          node -e "
+          const fs = require('fs');
+          const crypto = require('crypto');
+          const hash = (p) => crypto.createHash('sha256').update(p).digest('hex');
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+          async function run() {
+            const payload = JSON.parse(process.env.PAYLOAD);
+            const gistUrl = 'https://api.github.com/gists/' + process.env.GIST_ID;
+            const headers = { 'Authorization': 'token ' + process.env.GIST_TOKEN, 'Accept': 'application/vnd.github.v3+json' };
+            
+            const gistReq = await fetch(gistUrl, { headers });
+            const gistData = await gistReq.json();
+            let users = JSON.parse(gistData.files['users.json'].content);
+            let responseData = {};
 
-      - name: Upload Artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '.' 
+            try {
+                if (payload.actionType === 'register') {
+                    users.push({ id: crypto.randomUUID(), username: payload.username, password: hash(payload.password), status: 'approved', token: null });
+                    responseData = { status: 200, message: 'Success!' };
+                } else {
+                    const user = users.find(u => u.username === payload.username && u.password === hash(payload.password));
+                    if (!user) throw new Error('Invalid');
+                    const token = crypto.randomUUID();
+                    user.token = token;
+                    responseData = { status: 200, token, username: user.username };
+                }
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+                // SAVE BOTH USERS AND THE SPECIFIC RESPONSE TO THE GIST
+                await fetch(gistUrl, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({
+                        files: {
+                            'users.json': { content: JSON.stringify(users, null, 2) },
+                            ['res-' + payload.requestId + '.json']: { content: JSON.stringify(responseData) }
+                        }
+                    })
+                });
+            } catch (e) {
+                // If error, still write the error response to Gist
+                await fetch(gistUrl, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({ files: { ['res-' + payload.requestId + '.json']: { content: JSON.stringify({ status: 400, error: e.message }) } } })
+                });
+            }
+          }
+          run();
+          "
