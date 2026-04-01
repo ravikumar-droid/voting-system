@@ -5,8 +5,8 @@
  * will be automatically replaced by the 'deploy.yml' GitHub Action 
  * using your repository secrets. Do not change them manually here.
  */
-const GH_OWNER = "YOUR_GITHUB_USERNAME"; 
-const GH_REPO = "YOUR_REPO_NAME"; 
+const GH_OWNER = "ravikumar-droid"; 
+const GH_REPO = "voting-system"; 
 const GH_PAT = "TOKEN_INJECTED_BY_ACTION"; 
 
 // Maps frontend actions to their specific .yml backend files
