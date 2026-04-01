@@ -1,4 +1,23 @@
-- name: Process Authentication
+name: Auth Backend (Gist DB)
+on:
+  workflow_dispatch:
+    inputs:
+      payload:
+        description: 'JSON Payload'
+        required: true
+
+permissions:
+  contents: write 
+
+jobs:
+  auth-logic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Process Auth
         env:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
           GIST_ID: ${{ secrets.GIST_ID }}
@@ -16,22 +35,22 @@
             
             const gistReq = await fetch(gistUrl, { headers });
             const gistData = await gistReq.json();
-            let users = JSON.parse(gistData.files['users.json'].content);
+            let users = JSON.parse(gistData.files['users.json'].content || '[]');
             let responseData = {};
 
             try {
                 if (payload.actionType === 'register') {
-                    users.push({ id: crypto.randomUUID(), username: payload.username, password: hash(payload.password), status: 'approved', token: null });
-                    responseData = { status: 200, message: 'Success!' };
+                    if (users.find(u => u.username === payload.username)) throw new Error('Username taken');
+                    users.push({ id: crypto.randomUUID(), username: payload.username, password: hash(payload.password), status: 'approved', token: null, role: 'user' });
+                    responseData = { status: 200, message: 'Registered successfully!' };
                 } else {
                     const user = users.find(u => u.username === payload.username && u.password === hash(payload.password));
-                    if (!user) throw new Error('Invalid');
+                    if (!user) throw new Error('Invalid username or password');
                     const token = crypto.randomUUID();
                     user.token = token;
-                    responseData = { status: 200, token, username: user.username };
+                    responseData = { status: 200, token, username: user.username, role: user.role };
                 }
 
-                // SAVE BOTH USERS AND THE SPECIFIC RESPONSE TO THE GIST
                 await fetch(gistUrl, {
                     method: 'PATCH',
                     headers,
@@ -43,7 +62,6 @@
                     })
                 });
             } catch (e) {
-                // If error, still write the error response to Gist
                 await fetch(gistUrl, {
                     method: 'PATCH',
                     headers,
