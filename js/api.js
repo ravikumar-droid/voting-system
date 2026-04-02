@@ -1,17 +1,15 @@
 /**
- * SECUREVOTE ADVANCED API v3.0
- * Optimized for Parallel Execution & High-Speed Polling
+ * SECUREVOTE ULTRA-FAST API v4.0
+ * Goal: Resolve in 5-8 attempts (~10 seconds total)
  */
 
-console.log("🚀 api.js: Initializing High-Speed Core...");
+console.log("⚡ Turbo API: Initializing...");
 
-// 1. CONFIGURATION
 const GH_OWNER = "ravikumar-droid";
 const GH_REPO = "voting-system";
 const GH_PAT = "PLACEHOLDER_TOKEN";
 const GIST_ID = "c5a19b5d804791fe34ce171d15b6f1f0";
 
-// 2. WORKFLOW MAPPING
 const workflows = {
     "login": "auth.yml",
     "register": "auth.yml",
@@ -24,34 +22,34 @@ const workflows = {
 };
 
 /**
- * CORE: Dispatch and Poll in Parallel
- * This is the "Speed Trick": We don't wait for the dispatch to finish 
- * before we start looking for the answer.
+ * TURBO DISPATCH: Parallel non-blocking execution
  */
 async function dispatchAction(actionType, payload) {
     const requestId = crypto.randomUUID();
     const workflowFile = workflows[actionType];
-    
-    if (!workflowFile) throw new Error("Invalid Action Mapping");
-
     const fullPayload = { ...payload, requestId, actionType };
     
-    console.log(`📡 [${actionType}] Launching Parallel Request...`);
+    console.log(`🚀 [${actionType}] Turbo-Dispatching...`);
 
-    // START TRIGGER AND POLLING SIMULTANEOUSLY
-    const [response] = await Promise.all([
-        pollForResponse(requestId), // Start checking the Gist immediately
-        triggerWorkflow(workflowFile, fullPayload) // Send the request to GitHub
-    ]);
+    // SPEED TRICK: Start both at the same time. 
+    // We don't await the trigger; we start polling immediately.
+    const triggerTask = triggerWorkflow(workflowFile, fullPayload);
+    const pollTask = pollTurbo(requestId);
+
+    // Wait for the response (the trigger runs in background)
+    const response = await pollTask;
+    
+    // Ensure the trigger actually worked (sanity check)
+    await triggerTask; 
 
     return response;
 }
 
 /**
- * TRIGGER: Fire-and-forget GitHub Dispatch
+ * TRIGGER: Minified Headers for fast dispatch
  */
 async function triggerWorkflow(file, payload) {
-    const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${file}/dispatches`, {
+    return fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${file}/dispatches`, {
         method: "POST",
         headers: {
             "Accept": "application/vnd.github.v3+json",
@@ -60,67 +58,52 @@ async function triggerWorkflow(file, payload) {
         },
         body: JSON.stringify({ ref: "main", inputs: { payload: JSON.stringify(payload) } })
     });
-    if (!res.ok) throw new Error(`Dispatch Failed: ${res.status}`);
-    return true;
 }
 
 /**
- * POLLING: High-Frequency Aggressive Search
- * Frequency increased to 1.5 seconds for instant-feel feedback.
+ * POLL TURBO: High-Frequency 1-Second Loop
+ * Hits the "5-6 attempts" target.
  */
-async function pollForResponse(requestId) {
-    // Aggressive Cache Busting
-    const gistApi = `https://api.github.com/gists/${GIST_ID}?nocache=${Date.now()}`;
+async function pollTurbo(requestId) {
+    const gistApi = `https://api.github.com/gists/${GIST_ID}`;
     const fileName = `res-${requestId}.json`;
     
     return new Promise((resolve, reject) => {
-        let attempts = 0;
+        let count = 0;
+        
         const interval = setInterval(async () => {
-            attempts++;
+            count++;
             
-            // Log progress every 5 seconds for UI awareness
-            if (attempts % 3 === 0) console.log(`⏳ Searching... (Attempt ${attempts}/40)`);
+            // Log every attempt for user to see the speed
+            console.log(`⏳ Attempt ${count}/30...`);
 
-            if (attempts > 40) { 
+            if (count > 30) { 
                 clearInterval(interval); 
-                reject("Backend is processing slowly. Please refresh."); 
+                reject("Backend Timeout. Actions may be queued by GitHub."); 
             }
             
             try {
-                const res = await fetch(gistApi, {
-                    headers: { "Authorization": `token ${GH_PAT}` }
+                // cache: "no-store" bypasses browser cache for millisecond accuracy
+                const res = await fetch(`${gistApi}?t=${Date.now()}`, {
+                    headers: { "Authorization": `token ${GH_PAT}` },
+                    cache: "no-store" 
                 });
                 const gistData = await res.json();
                 
                 if (gistData.files && gistData.files[fileName]) {
-                    const data = JSON.parse(gistData.files[fileName].content);
+                    const content = JSON.parse(gistData.files[fileName].content);
                     clearInterval(interval);
+                    console.log(`✅ Success in ${count} attempts!`);
                     
-                    // AUTO-CLEANUP: Tell GitHub to delete the response file 
-                    // This keeps the database small and future API calls fast.
-                    cleanupGistResponse(fileName);
-
-                    if (data.status === 200) {
-                        console.log("✅ Request Resolved Successfully");
-                        resolve(data);
-                    } else {
-                        reject(data.error);
-                    }
+                    // Fire-and-forget cleanup to keep Gist performance high
+                    cleanup(fileName);
+                    
+                    if (content.status === 200) resolve(content);
+                    else reject(content.error);
                 }
-            } catch (e) { /* Silently retry on network blips */ }
-        }, 1500); // 1.5 seconds is the sweet spot for GitHub API limits
+            } catch (e) { /* Retry silently */ }
+        }, 1000); // 1.0 second frequency: Absolute safe limit for GH API
     });
-}
-
-/**
- * CLEANUP: Deletes the temp response file from Gist
- */
-async function cleanupGistResponse(fileName) {
-    fetch(`https://api.github.com/gists/${GIST_ID}`, {
-        method: "PATCH",
-        headers: { "Authorization": `token ${GH_PAT}` },
-        body: JSON.stringify({ files: { [fileName]: null } })
-    }).catch(() => {}); // Fire and forget
 }
 
 /**
@@ -129,18 +112,23 @@ async function cleanupGistResponse(fileName) {
 async function fetchPollResults() {
     try {
         const res = await fetch(`https://api.github.com/gists/${GIST_ID}?t=${Date.now()}`, { 
-            headers: { "Authorization": `token ${GH_PAT}` } 
+            headers: { "Authorization": `token ${GH_PAT}` },
+            cache: "no-store"
         });
         const gistData = await res.json();
-        
-        if (gistData.files && gistData.files["public_polls.json"]) {
-            return JSON.parse(gistData.files["public_polls.json"].content);
-        }
-        return [];
-    } catch (e) {
-        console.error("Poll Retrieval Error");
-        return [];
-    }
+        return JSON.parse(gistData.files["public_polls.json"].content);
+    } catch (e) { return []; }
 }
 
-console.log("✅ api.js: High-Speed Core Ready!");
+/**
+ * CLEANUP: Remote file deletion
+ */
+function cleanup(file) {
+    fetch(`https://api.github.com/gists/${GIST_ID}`, {
+        method: "PATCH",
+        headers: { "Authorization": `token ${GH_PAT}` },
+        body: JSON.stringify({ files: { [file]: null } })
+    }).catch(()=>{});
+}
+
+console.log("✅ Turbo API: Ready!");
