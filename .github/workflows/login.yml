@@ -1,49 +1,98 @@
-name: Login Backend
+name: Fast Login Backend
 on:
-  repository_dispatch:
-    types: [login]
+  workflow_dispatch:
+    inputs:
+      payload:
+        required: true
 
 jobs:
-  process-login:
+  login-logic:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-node@v3
-      - run: npm install mongodb bcryptjs crypto
-      - env:
-          MONGO_URI: ${{ secrets.MONGO_URI }}
-          PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+      - name: Execute Fast Login
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          PAYLOAD: ${{ github.event.inputs.payload }}
         run: |
-          cat << 'EOF' > index.js
-          const { MongoClient } = require('mongodb');
-          const bcrypt = require('bcryptjs');
-          const crypto = require('crypto');
+          # Running pure Node.js immediately (using pre-installed environment)
+          node -e "
           async function run() {
             const payload = JSON.parse(process.env.PAYLOAD);
-            const client = new MongoClient(process.env.MONGO_URI);
-            await client.connect();
-            const db = client.db('voting_db');
+            const gistId = process.env.GIST_ID;
+            const gistToken = process.env.GIST_TOKEN;
+            const gistUrl = 'https://api.github.com/gists/' + gistId;
+            const headers = { 
+              'Authorization': 'token ' + gistToken, 
+              'Accept': 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json'
+            };
+            
+            const crypto = require('crypto');
+            // SHA256 Hashing for fast password verification
+            const hash = (p) => crypto.createHash('sha256').update(p).digest('hex');
+
             try {
-              const user = await db.collection('Users').findOne({ username: payload.username });
-              if (!user) throw new Error("Invalid credentials");
-              if (user.status === 'pending') throw new Error("Account pending admin approval");
-              if (user.status === 'blocked') throw new Error("Account blocked");
+              // 1. Fetch current database from Gist
+              const gistReq = await fetch(gistUrl, { headers });
+              const gistData = await gistReq.json();
               
-              const isValid = await bcrypt.compare(payload.password, user.password);
-              if (!isValid) throw new Error("Invalid credentials");
+              let users = JSON.parse(gistData.files['users.json'].content || '[]');
               
-              const token = crypto.randomUUID();
-              await db.collection('Users').updateOne({ _id: user._id }, { $set: { token } });
-              
-              await db.collection('Responses').insertOne({ 
-                requestId: payload.requestId, status: 200, 
-                data: { token, role: user.role, username: user.username, userId: user._id.toString() }
+              // 2. Logic: Find User
+              const userIndex = users.findIndex(u => u.username === payload.username);
+              if (userIndex === -1) throw new Error('Invalid credentials');
+
+              const user = users[userIndex];
+
+              // 3. Logic: Verify Password & Status
+              if (user.password !== hash(payload.password)) throw new Error('Invalid credentials');
+              if (user.status === 'pending') throw new Error('Account pending admin approval');
+              if (user.status === 'blocked') throw new Error('Account blocked');
+
+              // 4. Generate Session Token
+              const newToken = crypto.randomUUID();
+              users[userIndex].token = newToken; // Update the token in our list
+
+              const responseData = { 
+                status: 200, 
+                token: newToken, 
+                role: user.role, 
+                username: user.username, 
+                userId: user.id 
+              };
+
+              // 5. Batch Update: Save User List and Response File in ONE PATCH
+              const response = await fetch(gistUrl, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({
+                  files: {
+                    'users.json': { content: JSON.stringify(users) },
+                    ['res-' + payload.requestId + '.json']: { 
+                      content: JSON.stringify(responseData) 
+                    }
+                  }
+                })
               });
-            } catch (error) {
-              await db.collection('Responses').insertOne({ requestId: payload.requestId, status: 400, data: { error: error.message }});
-            } finally {
-              await client.close();
+
+              if (response.ok) console.log('Login Processed in seconds');
+
+            } catch (e) {
+              // Send error response back to Gist so frontend stops waiting
+              await fetch(gistUrl, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({
+                  files: { 
+                    ['res-' + payload.requestId + '.json']: { 
+                      content: JSON.stringify({ status: 400, error: e.message }) 
+                    } 
+                  }
+                })
+              });
+              process.exit(1);
             }
           }
           run();
-          EOF
-          node index.js
+          "
