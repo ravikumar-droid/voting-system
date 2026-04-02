@@ -1,39 +1,56 @@
-name: Secure Deploy
+name: Ultra-Fast Secure Deploy
 on:
   push:
     branches: [ main ]
+  workflow_dispatch: # Allows manual trigger for instant testing
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# SPEED TRICK: If you push twice, the first (slower) build is killed 
+# immediately to make room for the new one.
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Fast Checkout
         uses: actions/checkout@v4
+        with:
+          # SPEED TRICK: Only download the files needed for the website. 
+          # We skip the heavy .git history and backend workflow files.
+          sparse-checkout: |
+            index.html
+            dashboard.html
+            admin.html
+            js/
+            css/
+            api/
 
-      - name: Inject Secrets
+      - name: Single-Pass Injection
         env:
           MY_TOKEN: ${{ secrets.GH_PAT }}
           MY_USER: ${{ github.repository_owner }}
           MY_REPO: ${{ github.event.repository.name }}
         run: |
-          # We use '|' as a delimiter to avoid issues with special characters in tokens
-          sed -i "s|PLACEHOLDER_TOKEN|$MY_TOKEN|g" js/api.js
-          sed -i "s|PLACEHOLDER_USER|$MY_USER|g" js/api.js
-          sed -i "s|PLACEHOLDER_REPO|$MY_REPO|g" js/api.js
+          # SPEED TRICK: One single 'sed' command for all three replacements.
+          # This is faster than calling 'sed' three separate times.
+          sed -i "s|PLACEHOLDER_TOKEN|$MY_TOKEN|g; s|PLACEHOLDER_USER|$MY_USER|g; s|PLACEHOLDER_REPO|$MY_REPO|g" js/api.js
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload Artifact
+      - name: Optimized Artifact Upload
         uses: actions/upload-pages-artifact@v3
         with:
+          # By using sparse checkout, this folder is tiny and uploads instantly
           path: '.' 
 
-      - name: Deploy to GitHub Pages
+      - name: Rapid Deploy
         id: deployment
         uses: actions/deploy-pages@v4
