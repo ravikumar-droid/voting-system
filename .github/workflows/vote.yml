@@ -1,42 +1,40 @@
-name: Vote Backend (Gist DB)
+name: Fast Vote Backend
 on:
   workflow_dispatch:
     inputs:
       payload:
         required: true
 
-permissions:
-  contents: write
-
-# Prevents multiple votes from conflicting during the database update
+# Database safety remains priority
 concurrency: 
   group: gist-database-lock
   cancel-in-progress: false 
 
 jobs:
   vote-logic:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # Fastest startup runner
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-
-      - name: Process Vote Securely
+      - name: Execute Fast Logic
         env:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
           GIST_ID: ${{ secrets.GIST_ID }}
           PAYLOAD: ${{ github.event.inputs.payload }}
         run: |
+          # No checkout or setup-node. Running pure Node.js immediately.
           node -e "
           async function run() {
             const payload = JSON.parse(process.env.PAYLOAD);
             const gistId = process.env.GIST_ID;
             const gistToken = process.env.GIST_TOKEN;
             const gistUrl = 'https://api.github.com/gists/' + gistId;
-            const headers = { 'Authorization': 'token ' + gistToken, 'Accept': 'application/vnd.github.v3+json' };
+            const headers = { 
+              'Authorization': 'token ' + gistToken, 
+              'Accept': 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json'
+            };
             
             try {
-              // 1. Fetch current database state
+              // 1. Single Fetch for all DB files
               const gistReq = await fetch(gistUrl, { headers });
               const gistData = await gistReq.json();
               
@@ -44,24 +42,16 @@ jobs:
               let votes = JSON.parse(gistData.files['votes.json'].content || '[]');
               let polls = JSON.parse(gistData.files['polls.json'].content || '[]');
               
-              // 2. VALIDATION: Check User
+              // 2. Logic & Validations (O(n) complexity)
               const user = users.find(u => u.token === payload.token);
-              if (!user) throw new Error('Unauthorized: Please log in again.');
+              if (!user) throw new Error('Unauthorized');
 
-              // 3. VALIDATION: Check Poll Status
               const poll = polls.find(p => p.id === payload.pollId);
-              if (!poll) throw new Error('Election not found.');
-              
-              // CRITICAL: Block voting if the election is closed
-              if (poll.status === 'closed') {
-                throw new Error('This election has ended. No more votes are accepted.');
-              }
+              if (!poll || poll.status === 'closed') throw new Error('Election Closed');
 
-              // 4. VALIDATION: Prevent Duplicate Voting
-              const alreadyVoted = votes.find(v => v.pollId === payload.pollId && v.userId === user.id);
-              if (alreadyVoted) throw new Error('You have already cast your vote for this election.');
+              if (votes.find(v => v.pollId === payload.pollId && v.userId === user.id)) throw new Error('Already Voted');
 
-              // 5. RECORD THE VOTE
+              // 3. Update State
               votes.push({ 
                 pollId: payload.pollId, 
                 userId: user.id, 
@@ -69,34 +59,32 @@ jobs:
                 timestamp: new Date().toISOString() 
               });
 
-              // 6. UPDATE PUBLIC RESULTS & STATS
+              // 4. Map Results
               const publicPolls = polls.map(p => {
-                const pollVotes = votes.filter(v => v.pollId === p.id);
-                const results = p.options.map((_, i) => pollVotes.filter(v => v.optionIndex === i).length);
+                const pVotes = votes.filter(v => v.pollId === p.id);
+                const results = p.options.map((_, i) => pVotes.filter(v => v.optionIndex === i).length);
                 return { ...p, results };
               });
 
-              // 7. SYNC ALL DATA BACK TO GIST
-              await fetch(gistUrl, {
+              // 5. Final Patch (Database Sync)
+              const response = await fetch(gistUrl, {
                 method: 'PATCH',
                 headers,
                 body: JSON.stringify({
                   files: {
-                    'votes.json': { content: JSON.stringify(votes, null, 2) },
-                    'public_polls.json': { content: JSON.stringify(publicPolls, null, 2) },
-                    'polls.json': { content: JSON.stringify(publicPolls, null, 2) },
+                    'votes.json': { content: JSON.stringify(votes) },
+                    'public_polls.json': { content: JSON.stringify(publicPolls) },
+                    'polls.json': { content: JSON.stringify(publicPolls) },
                     ['res-' + payload.requestId + '.json']: { 
-                      content: JSON.stringify({ status: 200, message: 'Your vote has been recorded securely.' }) 
+                      content: JSON.stringify({ status: 200, message: 'Vote Counted' }) 
                     }
                   }
                 })
               });
-              
-              console.log('Vote processed successfully.');
+
+              if (response.ok) console.log('Speed: Vote Processed in ms');
 
             } catch (e) {
-              console.error('Voting Error:', e.message);
-              // Send error back to frontend
               await fetch(gistUrl, {
                 method: 'PATCH',
                 headers,
@@ -108,6 +96,7 @@ jobs:
                   }
                 })
               });
+              process.exit(1);
             }
           }
           run();
