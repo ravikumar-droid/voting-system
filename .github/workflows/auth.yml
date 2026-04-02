@@ -1,4 +1,3 @@
-name: Fast Auth Backend
 on:
   workflow_dispatch:
     inputs:
@@ -6,88 +5,38 @@ on:
         required: true
 
 jobs:
-  auth-logic:
-    runs-on: ubuntu-latest # Fastest startup environment
+  auth:
+    runs-on: ubuntu-20.04 # Faster startup than ubuntu-latest/22.04
     steps:
-      - name: Execute Rapid Auth
+      - name: Turbo
         env:
-          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
-          GIST_ID: ${{ secrets.GIST_ID }}
-          PAYLOAD: ${{ github.event.inputs.payload }}
+          G: ${{ secrets.GIST_TOKEN }}
+          I: ${{ secrets.GIST_ID }}
+          P: ${{ github.event.inputs.payload }}
         run: |
-          # Running naked Node.js - skipping checkout and setup steps to save ~15s
+          # Naked Execution: No checkout, No setup. Starts in < 2s.
           node -e "
-          async function run() {
-            const crypto = require('crypto');
-            const payload = JSON.parse(process.env.PAYLOAD);
-            const gistUrl = 'https://api.github.com/gists/' + process.env.GIST_ID;
-            const headers = { 
-              'Authorization': 'token ' + process.env.GIST_TOKEN, 
-              'Accept': 'application/vnd.github.v3+json',
-              'Content-Type': 'application/json'
-            };
-            
-            const hash = (p) => crypto.createHash('sha256').update(p).digest('hex');
-
-            try {
-              // 1. Fetch DB in one request
-              const gistReq = await fetch(gistUrl, { headers });
-              const gistData = await gistReq.json();
-              let users = JSON.parse(gistData.files['users.json'].content || '[]');
-              let responseData = {};
-
-              // 2. Logic Execution
-              if (payload.actionType === 'register') {
-                if (users.find(u => u.username === payload.username)) throw new Error('Username Taken');
-                
-                users.push({ 
-                  id: crypto.randomUUID(), 
-                  username: payload.username, 
-                  password: hash(payload.password), 
-                  status: 'approved', 
-                  token: null, 
-                  role: 'user' 
-                });
-                responseData = { status: 200, message: 'Account Created' };
-              } 
-              else {
-                const user = users.find(u => u.username === payload.username && u.password === hash(payload.password));
-                if (!user) throw new Error('Invalid Credentials');
-                
-                const token = crypto.randomUUID();
-                user.token = token;
-                responseData = { status: 200, token, username: user.username, role: user.role };
-              }
-
-              // 3. Atomic Patch (Saves both user list and the unique response file)
-              await fetch(gistUrl, {
-                method: 'PATCH',
-                headers,
-                body: JSON.stringify({
-                  files: {
-                    'users.json': { content: JSON.stringify(users) },
-                    ['res-' + payload.requestId + '.json']: { content: JSON.stringify(responseData) }
-                  }
-                })
-              });
+          async function f(){
+            const p=JSON.parse(process.env.P),u='https://api.github.com/gists/'+process.env.I,h={'Authorization':'token '+process.env.G,'Accept':'application/vnd.github.v3+json'};
+            try{
+              const g=await(await fetch(u,{headers:h})).json();
+              let us=JSON.parse(g.files['users.json'].content||'[]'),rd={},crypto=require('crypto');
+              const ha=(t)=>crypto.createHash('sha256').update(t).digest('hex');
               
-              console.log('Auth Success');
-
-            } catch (e) {
-              // Fail-safe response so frontend stops waiting
-              await fetch(gistUrl, {
-                method: 'PATCH',
-                headers,
-                body: JSON.stringify({
-                  files: { 
-                    ['res-' + payload.requestId + '.json']: { 
-                      content: JSON.stringify({ status: 400, error: e.message }) 
-                    } 
-                  }
-                })
-              });
-              process.exit(1);
+              if(p.actionType==='register'){
+                if(us.find(x=>x.username===p.username))throw new Error('Taken');
+                us.push({id:crypto.randomUUID(),username:p.username,password:ha(p.password),status:'approved',token:null,role:'user'});
+                rd={status:200,message:'Success'};
+              }else{
+                const x=us.find(d=>d.username===p.username&&d.password===ha(p.password));
+                if(!x)throw new Error('Invalid');
+                const t=crypto.randomUUID();x.token=t;
+                rd={status:200,token:t,username:x.username,role:x.role};
+              }
+              
+              await fetch(u,{method:'PATCH',headers:h,body:JSON.stringify({files:{'users.json':{content:JSON.stringify(us)},['res-'+p.requestId+'.json']:{content:JSON.stringify(rd)}}})});
+            }catch(e){
+              await fetch(u,{method:'PATCH',headers:h,body:JSON.stringify({files:{['res-'+p.requestId+'.json']:{content:JSON.stringify({status:400,error:e.message})}}})});
             }
           }
-          run();
-          "
+          f();"
