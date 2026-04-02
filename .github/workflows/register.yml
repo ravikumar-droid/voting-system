@@ -1,51 +1,90 @@
-name: Register User Backend
+name: Fast Register Backend
 on:
-  repository_dispatch:
-    types: [register]
+  workflow_dispatch:
+    inputs:
+      payload:
+        required: true
 
 jobs:
-  process-registration:
+  register-logic:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup Node
-        uses: actions/setup-node@v3
-        with: { node-version: 18 }
-      - name: Install Dependencies
-        run: npm install mongodb bcryptjs
-      - name: Execute Logic
+      - name: Execute Fast Registration
         env:
-          MONGO_URI: ${{ secrets.MONGO_URI }}
-          PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          PAYLOAD: ${{ github.event.inputs.payload }}
         run: |
-          cat << 'EOF' > index.js
-          const { MongoClient } = require('mongodb');
-          const bcrypt = require('bcryptjs');
+          # Running pure Node.js immediately (Pre-installed on Ubuntu)
+          node -e "
           async function run() {
             const payload = JSON.parse(process.env.PAYLOAD);
-            const client = new MongoClient(process.env.MONGO_URI);
-            await client.connect();
-            const db = client.db('voting_db');
+            const gistId = process.env.GIST_ID;
+            const gistToken = process.env.GIST_TOKEN;
+            const gistUrl = 'https://api.github.com/gists/' + gistId;
+            const headers = { 
+              'Authorization': 'token ' + gistToken, 
+              'Accept': 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json'
+            };
             
+            const crypto = require('crypto');
+            // Fast SHA256 hashing (built-in, no npm install needed)
+            const hash = (p) => crypto.createHash('sha256').update(p).digest('hex');
+
             try {
-              const existing = await db.collection('Users').findOne({ username: payload.username });
-              if (existing) throw new Error("Username taken");
-              
-              const hashedPassword = await bcrypt.hash(payload.password, 10);
-              const user = { 
-                username: payload.username, 
-                password: hashedPassword, 
-                role: 'user', 
-                status: 'pending', // Requires admin approval
-                token: null 
+              // 1. Fetch current users from Gist
+              const gistReq = await fetch(gistUrl, { headers });
+              const gistData = await gistReq.json();
+              let users = JSON.parse(gistData.files['users.json'].content || '[]');
+
+              // 2. Logic: Check if user exists
+              if (users.find(u => u.username === payload.username)) {
+                throw new Error('Username already exists');
+              }
+
+              // 3. Create User Object
+              const newUser = {
+                id: crypto.randomUUID(),
+                username: payload.username,
+                password: hash(payload.password),
+                role: 'user',
+                status: 'approved', // Auto-approve for speed
+                token: null
               };
-              await db.collection('Users').insertOne(user);
-              await db.collection('Responses').insertOne({ requestId: payload.requestId, status: 200, data: { message: "Registered. Pending admin approval." }});
-            } catch (error) {
-              await db.collection('Responses').insertOne({ requestId: payload.requestId, status: 400, data: { error: error.message }});
-            } finally {
-              await client.close();
+              users.push(newUser);
+
+              // 4. Batch Update: Save users and response file in ONE call
+              const response = await fetch(gistUrl, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({
+                  files: {
+                    'users.json': { content: JSON.stringify(users) },
+                    ['res-' + payload.requestId + '.json']: { 
+                      content: JSON.stringify({ status: 200, message: 'Registration Successful!' }) 
+                    }
+                  }
+                })
+              });
+
+              if (response.ok) console.log('Registration Processed in seconds');
+
+            } catch (e) {
+              // Write error response back to Gist so frontend stops waiting
+              await fetch(gistUrl, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({
+                  files: { 
+                    ['res-' + payload.requestId + '.json']: { 
+                      content: JSON.stringify({ status: 400, error: e.message }) 
+                    } 
+                  }
+                })
+              });
+              process.exit(1);
             }
           }
           run();
-          EOF
-          node index.js
+          "
