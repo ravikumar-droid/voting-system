@@ -1,36 +1,33 @@
-name: Admin Backend (Gist DB)
+name: Fast Admin Backend
 on:
   workflow_dispatch:
     inputs:
       payload:
         required: true
 
-permissions:
-  contents: write
-
 jobs:
   admin-logic:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # Pre-warmed runner
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-
-      - name: Process Admin Action
+      - name: Execute Rapid Admin Action
         env:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
           GIST_ID: ${{ secrets.GIST_ID }}
           PAYLOAD: ${{ github.event.inputs.payload }}
         run: |
+          # No setup steps - executing logic immediately
           node -e "
           async function run() {
             const payload = JSON.parse(process.env.PAYLOAD);
-            const gistId = process.env.GIST_ID;
-            const gistToken = process.env.GIST_TOKEN;
-            const gistUrl = 'https://api.github.com/gists/' + gistId;
-            const headers = { 'Authorization': 'token ' + gistToken, 'Accept': 'application/vnd.github.v3+json' };
+            const gistUrl = 'https://api.github.com/gists/' + process.env.GIST_ID;
+            const headers = { 
+              'Authorization': 'token ' + process.env.GIST_TOKEN, 
+              'Accept': 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json'
+            };
             
             try {
+              // 1. Single-fetch for all DB files
               const gistReq = await fetch(gistUrl, { headers });
               const gistData = await gistReq.json();
               
@@ -38,85 +35,68 @@ jobs:
               let polls = JSON.parse(gistData.files['polls.json']?.content || '[]');
               let responseData = {};
 
-              // 1. SECURITY: Verify Admin Role
-              const adminUser = users.find(u => u.token === payload.token && u.role === 'admin');
-              if (!adminUser) throw new Error('Unauthorized: Admin access required');
+              // 2. SECURITY: Validate Admin
+              const admin = users.find(u => u.token === payload.token && u.role === 'admin');
+              if (!admin) throw new Error('Unauthorized');
 
-              // 2. ACTION: Create New Blind Poll
-              if (payload.actionType === 'admin_create_poll') {
-                const newPoll = { 
-                  id: 'poll_' + Date.now(), 
+              // 3. EXECUTE ACTION
+              const act = payload.actionType;
+              if (act === 'admin_create_poll') {
+                polls.push({ 
+                  id: 'p' + Date.now(), 
                   question: payload.question, 
                   options: payload.options, 
                   results: payload.options.map(() => 0),
                   status: 'active',
-                  showResults: false, // <--- HIDDEN BY DEFAULT
-                  createdAt: new Date().toISOString()
-                };
-                polls.push(newPoll);
-                responseData = { status: 200, message: 'Blind Election started!' };
+                  showResults: false 
+                });
+                responseData = { status: 200, message: 'Poll Created' };
               } 
-              
-              // 3. ACTION: Toggle Results Visibility (REVEAL / HIDE)
-              else if (payload.actionType === 'admin_toggle_results') {
-                const poll = polls.find(p => p.id === payload.pollId);
-                if (!poll) throw new Error('Poll not found');
-                
-                poll.showResults = !poll.showResults; // Flip the visibility switch
-                responseData = { status: 200, message: poll.showResults ? 'Results are now PUBLIC' : 'Results are now HIDDEN' };
+              else if (act === 'admin_toggle_results') {
+                const p = polls.find(x => x.id === payload.pollId);
+                if (p) p.showResults = !p.showResults;
+                responseData = { status: 200 };
+              }
+              else if (act === 'admin_toggle_poll') {
+                const p = polls.find(x => x.id === payload.pollId);
+                if (p) p.status = (p.status === 'active') ? 'closed' : 'active';
+                responseData = { status: 200 };
+              }
+              else if (act === 'admin_delete_poll') {
+                polls = polls.filter(x => x.id !== payload.pollId);
+                responseData = { status: 200 };
+              }
+              else if (act === 'admin_approve_user') {
+                const u = users.find(x => x.id === payload.targetUserId);
+                if (u) u.status = 'approved';
+                responseData = { status: 200 };
               }
 
-              // 4. ACTION: Toggle Poll Status (STOP / START)
-              else if (payload.actionType === 'admin_toggle_poll') {
-                const poll = polls.find(p => p.id === payload.pollId);
-                if (!poll) throw new Error('Poll not found');
-                
-                poll.status = (poll.status === 'active') ? 'closed' : 'active';
-                responseData = { status: 200, message: 'Election status updated!' };
-              }
-
-              // 5. ACTION: Delete Poll
-              else if (payload.actionType === 'admin_delete_poll') {
-                polls = polls.filter(p => p.id !== payload.pollId);
-                responseData = { status: 200, message: 'Election deleted.' };
-              }
-
-              // 6. ACTION: Approve Pending User
-              else if (payload.actionType === 'admin_approve_user') {
-                const user = users.find(u => u.id === payload.targetUserId);
-                if (user) user.status = 'approved';
-                responseData = { status: 200, message: 'User approved!' };
-              }
-
-              // 7. SYNC DATA TO GIST
+              // 4. ATOMIC UPDATE: Sync all files in one API call
+              // Removing formatting from stringify to reduce payload size and latency
               await fetch(gistUrl, {
                 method: 'PATCH',
                 headers,
                 body: JSON.stringify({
                   files: {
-                    'users.json': { content: JSON.stringify(users, null, 2) },
-                    'polls.json': { content: JSON.stringify(polls, null, 2) },
-                    'public_polls.json': { content: JSON.stringify(polls, null, 2) },
+                    'users.json': { content: JSON.stringify(users) },
+                    'polls.json': { content: JSON.stringify(polls) },
+                    'public_polls.json': { content: JSON.stringify(polls) },
                     ['res-' + payload.requestId + '.json']: { content: JSON.stringify(responseData) }
                   }
                 })
               });
-              
-              console.log('Admin Operation Success');
+              console.log('Success');
 
             } catch (e) {
-              console.error('Admin Error:', e.message);
               await fetch(gistUrl, {
                 method: 'PATCH',
                 headers,
                 body: JSON.stringify({
-                  files: { 
-                    ['res-' + payload.requestId + '.json']: { 
-                      content: JSON.stringify({ status: 400, error: e.message }) 
-                    } 
-                  }
+                  files: { ['res-' + payload.requestId + '.json']: { content: JSON.stringify({ status: 400, error: e.message }) } }
                 })
               });
+              process.exit(1);
             }
           }
           run();
